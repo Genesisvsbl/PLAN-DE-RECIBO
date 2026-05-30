@@ -3,7 +3,7 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 
-from app import HTML, analyze
+from app import HTML, analyze, make_json_safe
 
 
 st.set_page_config(
@@ -34,7 +34,8 @@ uploaded = st.file_uploader(
 if uploaded:
     try:
         dataset = analyze(uploaded, uploaded.name)
-        html = HTML.replace("let dataset = null;", f"let dataset = {json.dumps(dataset, ensure_ascii=False)};")
+        safe_dataset = make_json_safe(dataset)
+        html = HTML.replace("let dataset = null;", f"let dataset = {json.dumps(safe_dataset, ensure_ascii=False)};")
         html = html.replace(
             'document.getElementById("demo").onclick = () => upload(true);',
             'document.getElementById("demo").onclick = () => initializeDashboard();',
