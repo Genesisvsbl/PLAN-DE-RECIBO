@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
+server.err.log
+server.out.log
+node_modules/
+analysis/
+outputs/
+*.xlsm
+*.xlsx
+*.xls
