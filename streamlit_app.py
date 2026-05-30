@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -17,109 +18,107 @@ st.markdown(
     """
     <style>
       .stApp { background:#eef4fb; }
-      header[data-testid="stHeader"] { display:none; }
-      div[data-testid="stToolbar"] { display:none; }
-      .block-container { padding:0; max-width:100%; }
-      .plan-shell {
-        min-height:100vh;
-        padding:20px 28px 28px;
-        box-sizing:border-box;
+      header[data-testid="stHeader"], div[data-testid="stToolbar"] { display:none; }
+      .block-container { padding:0 !important; max-width:100% !important; }
+      .streamlit-header {
+        position:relative;
+        margin:3px 18px 0;
+        min-height:104px;
+        border-radius:20px 20px 18px 18px;
+        background:#061a38;
+        color:#fff;
+        box-shadow:0 4px 0 #12b981, 0 24px 50px rgba(15,23,42,.18);
         font-family:Segoe UI, Arial, sans-serif;
-        color:#061a38;
       }
-      .plan-top {
-        display:flex;
-        align-items:flex-start;
-        justify-content:space-between;
-        gap:24px;
-        margin-bottom:18px;
+      .streamlit-header .brand {
+        position:absolute;
+        left:28px;
+        top:24px;
       }
-      .plan-brand h1 {
-        margin:0 0 8px;
-        font-size:34px;
+      .streamlit-header h1 {
+        margin:0;
+        font-size:36px;
         line-height:1;
         font-weight:950;
         letter-spacing:0;
       }
-      .plan-brand span {
+      .streamlit-header .badge {
         display:inline-flex;
-        margin-left:10px;
-        padding:5px 9px;
+        align-items:center;
+        margin-left:12px;
+        padding:6px 10px;
         border-radius:999px;
         background:#dbeafe;
         color:#1768f2;
-        font-size:13px;
+        font-size:14px;
         font-weight:950;
         vertical-align:middle;
       }
-      .plan-brand p {
-        margin:0;
-        color:#52657e;
-        font-size:14px;
-        font-weight:700;
+      .streamlit-header p {
+        margin:12px 0 0;
+        color:#e7eefb;
+        font-size:15px;
+        font-weight:850;
       }
-      .plan-import-note {
-        width:min(920px, 92vw);
-        margin:180px auto 0;
-        background:#ffffff;
-        border:1px solid #d8e4f4;
-        border-radius:18px;
-        padding:34px 38px;
-        box-shadow:0 26px 70px rgba(15,23,42,.12);
+      .fake-controls {
+        position:absolute;
+        right:14px;
+        top:14px;
+        display:flex;
+        gap:12px;
+        align-items:center;
       }
-      .plan-import-note strong {
-        display:inline-flex;
-        background:#eaf2ff;
-        color:#1768f2;
-        border-radius:999px;
-        padding:8px 13px;
-        font-size:13px;
-        letter-spacing:.06em;
-        font-weight:950;
-        text-transform:uppercase;
-        margin-bottom:18px;
-      }
-      .plan-import-note h2 {
-        margin:0 0 12px;
+      .fake-file {
+        width:360px;
+        height:50px;
+        border-radius:12px;
+        background:#fff;
         color:#061a38;
-        font-size:38px;
-        line-height:1.05;
-        font-weight:950;
+        display:flex;
+        align-items:center;
+        padding:0 14px;
+        font-weight:850;
+        font-size:14px;
+        overflow:hidden;
       }
-      .plan-import-note p {
-        margin:0;
+      .fake-file span {
+        display:inline-block;
+        border:1px solid #1f2937;
+        padding:5px 9px;
+        margin-right:8px;
+        font-weight:500;
+        background:#f8fafc;
+        color:#000;
+      }
+      .fake-action {
+        height:50px;
+        border-radius:11px;
+        padding:0 20px;
+        display:grid;
+        place-items:center;
+        font-size:15px;
+        font-weight:950;
+        white-space:nowrap;
+      }
+      .fake-action.primary { background:#1768f2; color:#fff; }
+      .fake-action.secondary { background:#eaf2ff; color:#061a38; }
+      .streamlit-meta {
+        margin:16px 22px 0;
         color:#52657e;
-        font-size:16px;
-        line-height:1.45;
-        font-weight:650;
+        font:850 13px Segoe UI, Arial, sans-serif;
       }
       section[data-testid="stFileUploader"] {
         position:absolute;
-        top:20px;
-        right:28px;
-        width:min(560px, calc(100vw - 56px));
-        margin:0;
-        background:#ffffff;
-        border:1px solid #d8e4f4;
-        border-radius:14px;
-        padding:10px 12px;
-        box-shadow:0 16px 36px rgba(15,23,42,.08);
-        z-index:5;
+        top:16px;
+        right:536px;
+        width:360px;
+        height:50px;
+        opacity:.01;
+        z-index:20;
+        overflow:hidden;
       }
-      section[data-testid="stFileUploader"] label,
-      section[data-testid="stFileUploader"] small {
-        display:none !important;
-      }
-      section[data-testid="stFileUploader"] button {
-        background:#1768f2 !important;
-        color:white !important;
-        border-radius:10px !important;
-        border:0 !important;
-        font-weight:900 !important;
-      }
-      .dashboard-loaded section[data-testid="stFileUploader"] {
-        display:none !important;
-      }
+      section[data-testid="stFileUploader"] * { cursor:pointer !important; }
+      .dashboard-loaded section[data-testid="stFileUploader"] { display:none !important; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -154,21 +153,21 @@ if uploaded:
     except Exception as exc:
         st.error(f"No pude procesar el archivo: {exc}")
 else:
+    generated = datetime.now().strftime("%Y-%m-%d %H:%M")
     st.markdown(
-        """
-        <div class="plan-shell">
-          <div class="plan-top">
-            <div class="plan-brand">
-              <h1>Plan de Recibo <span>2026.2</span></h1>
-              <p>Importa el archivo para activar los modulos de control.</p>
-            </div>
+        f"""
+        <section class="streamlit-header">
+          <div class="brand">
+            <h1>Plan de Recibo <span class="badge">2026.2</span></h1>
+            <p>Generado: {generated} | Esperando archivo</p>
           </div>
-          <section class="plan-import-note">
-            <strong>Acceso al dashboard</strong>
-            <h2>Sube tu archivo PLAN DE RECIBO</h2>
-            <p>Cuando cargues el Excel, el sistema abre el dashboard profesional con Indicadores, Proveedores, Recibo, Conciliacion y Base.</p>
-          </section>
-        </div>
+          <div class="fake-controls">
+            <div class="fake-file"><span>Seleccionar archivo</span> Sin archivo seleccionados</div>
+            <div class="fake-action primary">Importar y generar dashboard</div>
+            <div class="fake-action secondary">Usar archivo actual</div>
+          </div>
+        </section>
+        <div class="streamlit-meta">PLAN DE RECIBO 2026.2.xlsm | carga tu archivo para generar los registros</div>
         """,
         unsafe_allow_html=True,
     )
