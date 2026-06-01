@@ -1,14 +1,10 @@
 import json
 import io
-import urllib.parse
-import urllib.request
 
 import streamlit as st
 import streamlit.components.v1 as components
 
 from app import HTML, analyze, make_json_safe
-
-DEFAULT_ONEDRIVE_URL = "https://anheuserbuschinbev-my.sharepoint.com/:x:/g/personal/gen_maz_co_win093_gmodelo_com_mx/IQBf1LJMe9tFSa7owOBKh3zIAT4cRN6NDEfwzZw2COA2cBE?email=genesisvsbl%40outlook.com&e=6a9CKG"
 
 
 st.set_page_config(
@@ -67,42 +63,6 @@ st.markdown(
         padding:24px 16px 18px;
         border-bottom:1px solid #d8e4f4;
       }
-      div[data-testid="stTextInput"] {
-        padding:0 16px;
-      }
-      .online-note {
-        margin:10px 16px 0;
-        color:#52657e;
-        font:700 13px Segoe UI, Arial, sans-serif;
-      }
-      .sharepoint-help {
-        margin:12px 16px 0;
-        max-width:1180px;
-        background:#ffffff;
-        border:1px solid #d8e4f4;
-        border-left:6px solid #1768f2;
-        border-radius:14px;
-        padding:16px 18px;
-        box-shadow:0 14px 34px rgba(15,23,42,.08);
-        font-family:Segoe UI, Arial, sans-serif;
-        color:#061a38;
-      }
-      .sharepoint-help strong {
-        display:block;
-        font-size:16px;
-        margin-bottom:7px;
-      }
-      .sharepoint-help p {
-        margin:0 0 8px;
-        color:#52657e;
-        line-height:1.45;
-      }
-      .sharepoint-help ul {
-        margin:8px 0 0 18px;
-        padding:0;
-        color:#52657e;
-      }
-      .sharepoint-help li { margin:4px 0; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -128,46 +88,19 @@ def render_dashboard(dataset: dict) -> None:
     components.html(html, height=1600, scrolling=True)
 
 
-def candidate_download_urls(shared_url: str) -> list[str]:
-    url = shared_url.strip()
-    if not url:
-        return []
-    parsed = urllib.parse.urlparse(url)
-    clean_url = urllib.parse.urlunparse(parsed._replace(query="", fragment=""))
-    candidates = []
-    for base in (url, clean_url):
-        joiner = "&" if "?" in base else "?"
-        candidates.append(f"{base}{joiner}download=1")
-    encoded = urllib.parse.quote(url, safe="")
-    candidates.append(f"{parsed.scheme}://{parsed.netloc}/download.aspx?SourceUrl={encoded}")
-    seen = set()
-    return [item for item in candidates if not (item in seen or seen.add(item))]
-
-
-def fetch_online_workbook(shared_url: str) -> io.BytesIO:
-    headers = {"User-Agent": "Mozilla/5.0"}
-    errors = []
-    for url in candidate_download_urls(shared_url):
-        try:
-            request = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(request, timeout=45) as response:
-                content = response.read()
-                content_type = response.headers.get("Content-Type", "")
-            if content[:2] == b"PK":
-                return io.BytesIO(content)
-            preview = content[:180].decode("utf-8", errors="ignore").lower()
-            if "html" in content_type.lower() or "<html" in preview or "signin" in preview or "login" in preview:
-                errors.append("SharePoint devolvio una pagina web/login, no el Excel.")
-            else:
-                errors.append(f"Respuesta no reconocida: {content_type or 'sin content-type'}")
-        except Exception as exc:
-            errors.append(str(exc))
-    raise RuntimeError(
-        "SharePoint no entrego el Excel real a Streamlit. "
-        "El enlace devolvio una pagina web/login o una politica corporativa, no el archivo .xlsm. "
-        "Tu navegador lo abre porque ya tiene tu sesion iniciada, pero Streamlit Cloud no tiene esa sesion. "
-        "Para actualizar en linea se necesita un enlace de descarga anonima permitido por la empresa o una conexion Microsoft Graph con credenciales."
-    )
+def uploaded_excel_file(uploaded_file) -> io.BytesIO:
+    name = (uploaded_file.name or "").lower()
+    content = uploaded_file.getvalue()
+    valid_extension = name.endswith((".xlsm", ".xlsx", ".xls"))
+    valid_zip_excel = content[:2] == b"PK"
+    valid_old_excel = content[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    if not valid_extension or not (valid_zip_excel or valid_old_excel):
+        raise ValueError(
+            "El archivo seleccionado no es un Excel real. "
+            "En la captura aparece xlsx.svg, eso es solo el icono de OneDrive. "
+            "Debes seleccionar o descargar el archivo PLAN DE RECIBO 2026.2.xlsm real."
+        )
+    return io.BytesIO(content)
 
 
 if "dataset" in st.session_state:
@@ -178,42 +111,13 @@ else:
         type=["xlsm", "xlsx", "xls"],
         label_visibility="collapsed",
     )
-    remote_url = st.text_input(
-        "URL compartida de OneDrive",
-        value=DEFAULT_ONEDRIVE_URL,
-        placeholder="Pega aqui el enlace compartido del archivo si no lo quieres subir manualmente",
-        label_visibility="collapsed",
-    )
-    st.markdown('<div class="online-note">Archivo en linea: PLAN DE RECIBO 2026.2.xlsm</div>', unsafe_allow_html=True)
-    refresh_from_url = st.button("Actualizar PLAN DE RECIBO en linea", type="primary", use_container_width=False)
     if uploaded:
         try:
-            st.session_state["dataset"] = analyze(uploaded, uploaded.name)
+            file_obj = uploaded_excel_file(uploaded)
+            st.session_state["dataset"] = analyze(file_obj, uploaded.name)
             st.rerun()
         except Exception as exc:
             st.error(f"No pude procesar el archivo: {exc}")
-    elif refresh_from_url and remote_url:
-        try:
-            file_obj = fetch_online_workbook(remote_url)
-            file_name = "PLAN DE RECIBO 2026.2.xlsm"
-            st.session_state["dataset"] = analyze(file_obj, file_name)
-            st.rerun()
-        except Exception as exc:
-            st.error(str(exc))
-            st.markdown(
-                """
-                <div class="sharepoint-help">
-                  <strong>Ese enlace de OneDrive/SharePoint no es una descarga directa.</strong>
-                  <p>El dashboard esta bien; el bloqueo viene de SharePoint. Streamlit esta en la nube y no puede usar la sesion que tienes abierta en Chrome.</p>
-                  <ul>
-                    <li><b>Camino inmediato:</b> usa el boton Subir y carga el Excel.</li>
-                    <li><b>Camino automatico:</b> el area de TI debe permitir un enlace de descarga anonima o entregar credenciales Microsoft Graph para leer el archivo.</li>
-                    <li><b>Camino local:</b> si el sistema corre en tu PC, ahi si puede leer una ruta de OneDrive sincronizada.</li>
-                  </ul>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
     else:
         st.markdown(
             """
@@ -221,7 +125,7 @@ else:
               <section class="landing-card">
                 <div class="landing-badge">PLAN DE RECIBO 2026.2</div>
                 <h1>Importa tu archivo para generar el dashboard</h1>
-                <p>Sube el Excel en el control superior o pega un enlace compartido de OneDrive. El sistema genera los modulos de Indicadores, Proveedores, Recibo, Conciliacion y Base.</p>
+                <p>Sube el Excel real en el control superior. El sistema genera los modulos de Indicadores, Proveedores, Recibo, Conciliacion y Base.</p>
               </section>
             </div>
             """,
