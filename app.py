@@ -2221,7 +2221,8 @@ function renderCauseBlock(rows, config) {
     const sector = row["TIPO MATERIAL"] || "Sin sector";
     if (provider && row.PROVEEDOR !== provider) return;
     if (sectorFilter && sector !== sectorFilter) return;
-    if (!dateInRange(row["FECHA RECIBO"], from, to)) return;
+    const causeDate = row["FECHA RECIBO"] || row["FECHA ARRIBO"];
+    if (!dateInRange(causeDate, from, to)) return;
     const doc = String(row["N DOCUMENTO"] || "").trim();
     const docKey = doc || `${row["CODIGO CITA"] || ""}|${row.SKU || ""}|${row.PROVEEDOR || ""}|${row["FECHA RECIBO"] || ""}`;
     if (config.field === "NOVEDAD DOCUMENTAL" && docKey) {
@@ -2254,6 +2255,7 @@ function renderCauseBlock(rows, config) {
         "N documento": row["N DOCUMENTO"] || "",
         "Fecha estimada": row["FECHA ESTIMADA ENTREGA"] || "",
         "Fecha recibo": row["FECHA RECIBO"] || "",
+        "Fecha arribo": row["FECHA ARRIBO"] || "",
       });
     });
   });
@@ -2278,8 +2280,8 @@ function renderCauseBlock(rows, config) {
   const rowsOut = details
     .sort((a,b) => String(a[config.label]).localeCompare(String(b[config.label])) || String(a.Proveedor).localeCompare(String(b.Proveedor)))
     .slice(0, 60);
-  renderTable(config.tableId, rowsOut, [config.label, "Proveedor", "Material", "SKU", "Tipo material", "N documento", "Fecha estimada", "Fecha recibo"]);
-  document.getElementById(config.footerId).innerHTML = `<span>Mostrando ${rowsOut.length ? 1 : 0} a ${rowsOut.length} de ${details.length} registros</span><span>Filtrado por fecha de recibo</span>`;
+  renderTable(config.tableId, rowsOut, [config.label, "Proveedor", "Material", "SKU", "Tipo material", "N documento", "Fecha estimada", "Fecha recibo", "Fecha arribo"]);
+  document.getElementById(config.footerId).innerHTML = `<span>Mostrando ${rowsOut.length ? 1 : 0} a ${rowsOut.length} de ${details.length} registros</span><span>Filtrado por fecha recibo o arribo</span>`;
 }
 
 function renderCauseStats(config, stats) {
