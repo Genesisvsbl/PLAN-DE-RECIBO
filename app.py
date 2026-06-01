@@ -713,6 +713,8 @@ HTML = r"""<!doctype html>
     .filters { background:#ffffff; border:1px solid #e2e9f3; border-radius:8px; padding:13px; display:grid; grid-template-columns:repeat(9, minmax(110px, 1fr)); gap:9px; margin-bottom:12px; box-shadow:0 12px 26px rgba(15,23,42,.05); }
     label { font-size:10px; color:var(--slate); font-weight:800; display:block; margin-bottom:4px; }
     select, input[type="search"], input[type="date"] { width:100%; border:1px solid #c7d5e8; border-radius:7px; padding:8px 9px; background:white; color:var(--ink); font-size:11px; }
+    .filter-actions { display:flex; align-items:end; justify-content:flex-end; }
+    .clear-filters { width:100%; min-height:34px; border:1px solid #bfdbfe; background:#eef6ff; color:#1768f2; box-shadow:none; }
     .grid { display:grid; grid-template-columns:repeat(12, minmax(0, 1fr)); gap:12px; }
     .panel { background:#ffffff; border:1px solid #e2e9f3; border-radius:8px; padding:12px; min-height:238px; box-shadow:0 14px 28px rgba(15,23,42,.052); grid-column:span 4; }
     .dashboard-chart { grid-column:span 4; min-height:292px; }
@@ -1579,22 +1581,23 @@ HTML = r"""<!doctype html>
       line-height:1.08 !important;
       padding:4px 5px !important;
       vertical-align:middle;
+      text-align:center;
     }
-    #statusDetailTable th:nth-child(1), #statusDetailTable td:nth-child(1) { width:62px; }
-    #statusDetailTable th:nth-child(2), #statusDetailTable td:nth-child(2) { width:48px; text-align:center; }
-    #statusDetailTable th:nth-child(3), #statusDetailTable td:nth-child(3) { width:58px; text-align:center; }
+    #statusDetailTable th:nth-child(1), #statusDetailTable td:nth-child(1) { width:5%; }
+    #statusDetailTable th:nth-child(2), #statusDetailTable td:nth-child(2) { width:4%; }
+    #statusDetailTable th:nth-child(3), #statusDetailTable td:nth-child(3) { width:5%; }
     #statusDetailTable th:nth-child(4), #statusDetailTable td:nth-child(4),
-    #statusDetailTable th:nth-child(5), #statusDetailTable td:nth-child(5) { width:46px; text-align:center; }
-    #statusDetailTable th:nth-child(6), #statusDetailTable td:nth-child(6) { width:150px; }
-    #statusDetailTable th:nth-child(7), #statusDetailTable td:nth-child(7) { width:76px; }
-    #statusDetailTable th:nth-child(8), #statusDetailTable td:nth-child(8) { width:56px; text-align:center; }
-    #statusDetailTable th:nth-child(9), #statusDetailTable td:nth-child(9) { width:auto; }
+    #statusDetailTable th:nth-child(5), #statusDetailTable td:nth-child(5) { width:4%; }
+    #statusDetailTable th:nth-child(6), #statusDetailTable td:nth-child(6) { width:12%; }
+    #statusDetailTable th:nth-child(7), #statusDetailTable td:nth-child(7) { width:7%; }
+    #statusDetailTable th:nth-child(8), #statusDetailTable td:nth-child(8) { width:5%; }
+    #statusDetailTable th:nth-child(9), #statusDetailTable td:nth-child(9) { width:22%; }
     #statusDetailTable th:nth-child(10), #statusDetailTable td:nth-child(10),
-    #statusDetailTable th:nth-child(11), #statusDetailTable td:nth-child(11) { width:66px; text-align:right; }
-    #statusDetailTable th:nth-child(12), #statusDetailTable td:nth-child(12) { width:44px; text-align:center; }
-    #statusDetailTable th:nth-child(13), #statusDetailTable td:nth-child(13) { width:54px; text-align:center; }
-    #statusDetailTable th:nth-child(14), #statusDetailTable td:nth-child(14) { width:46px; text-align:center; }
-    #statusDetailTable th:nth-child(15), #statusDetailTable td:nth-child(15) { width:104px; }
+    #statusDetailTable th:nth-child(11), #statusDetailTable td:nth-child(11) { width:6%; }
+    #statusDetailTable th:nth-child(12), #statusDetailTable td:nth-child(12) { width:4%; }
+    #statusDetailTable th:nth-child(13), #statusDetailTable td:nth-child(13) { width:5%; }
+    #statusDetailTable th:nth-child(14), #statusDetailTable td:nth-child(14) { width:4%; }
+    #statusDetailTable th:nth-child(15), #statusDetailTable td:nth-child(15) { width:7%; }
     #statusDetailTable .type-chip {
       display:inline-flex;
       align-items:center;
@@ -1707,6 +1710,7 @@ HTML = r"""<!doctype html>
       <div><label>Estimada hasta</label><input id="estTo" type="date" /></div>
       <div><label>Reprogramada desde</label><input id="repFrom" type="date" /></div>
       <div><label>Reprogramada hasta</label><input id="repTo" type="date" /></div>
+      <div class="filter-actions"><button class="clear-filters" id="clearFilters" type="button">Limpiar filtros</button></div>
     </section>
 
     <section class="kpis" id="kpis"></section>
@@ -1934,6 +1938,7 @@ function buildFilters() {
   ["progFrom", "progTo", "estFrom", "estTo", "repFrom", "repTo"].forEach(id => {
     document.getElementById(id).onchange = applyFilters;
   });
+  document.getElementById("clearFilters").onclick = clearDashboardFilters;
   ["focusYear", "focusMonth", "focusMaterial", "focusProvider", "focusWeek", "focusSku", "focusSearch"].forEach(id => {
     document.getElementById(id).onchange = () => renderWeeklyFocus(dataset.rows);
   });
@@ -1976,6 +1981,18 @@ function syncWeekFilter() {
   const values = [...weeks].sort((a,b) => a.localeCompare(b, undefined, { numeric:true }));
   weekSelect.innerHTML = `<option value="">Todos</option>` + values.map(v => `<option>${escapeHtml(v)}</option>`).join("");
   weekSelect.value = values.includes(currentWeek) ? currentWeek : "";
+}
+
+function clearDashboardFilters() {
+  document.querySelectorAll("[data-filter]").forEach(select => {
+    select.value = "";
+  });
+  ["search", "progFrom", "progTo", "estFrom", "estTo", "repFrom", "repTo"].forEach(id => {
+    const field = document.getElementById(id);
+    if (field) field.value = "";
+  });
+  syncWeekFilter();
+  applyFilters();
 }
 
 function setActivePage(page) {
