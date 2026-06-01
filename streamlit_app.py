@@ -75,6 +75,34 @@ st.markdown(
         color:#52657e;
         font:700 13px Segoe UI, Arial, sans-serif;
       }
+      .sharepoint-help {
+        margin:12px 16px 0;
+        max-width:1180px;
+        background:#ffffff;
+        border:1px solid #d8e4f4;
+        border-left:6px solid #1768f2;
+        border-radius:14px;
+        padding:16px 18px;
+        box-shadow:0 14px 34px rgba(15,23,42,.08);
+        font-family:Segoe UI, Arial, sans-serif;
+        color:#061a38;
+      }
+      .sharepoint-help strong {
+        display:block;
+        font-size:16px;
+        margin-bottom:7px;
+      }
+      .sharepoint-help p {
+        margin:0 0 8px;
+        color:#52657e;
+        line-height:1.45;
+      }
+      .sharepoint-help ul {
+        margin:8px 0 0 18px;
+        padding:0;
+        color:#52657e;
+      }
+      .sharepoint-help li { margin:4px 0; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -135,9 +163,10 @@ def fetch_online_workbook(shared_url: str) -> io.BytesIO:
         except Exception as exc:
             errors.append(str(exc))
     raise RuntimeError(
-        "No pude descargar el archivo real desde SharePoint. "
-        "El enlace debe permitir descarga directa sin iniciar sesion. "
-        + " | ".join(errors[-2:])
+        "SharePoint no entrego el Excel real a Streamlit. "
+        "El enlace devolvio una pagina web/login o una politica corporativa, no el archivo .xlsm. "
+        "Tu navegador lo abre porque ya tiene tu sesion iniciada, pero Streamlit Cloud no tiene esa sesion. "
+        "Para actualizar en linea se necesita un enlace de descarga anonima permitido por la empresa o una conexion Microsoft Graph con credenciales."
     )
 
 
@@ -170,7 +199,21 @@ else:
             st.session_state["dataset"] = analyze(file_obj, file_name)
             st.rerun()
         except Exception as exc:
-            st.error(f"No pude leer el archivo en linea. Detalle: {exc}")
+            st.error(str(exc))
+            st.markdown(
+                """
+                <div class="sharepoint-help">
+                  <strong>Ese enlace de OneDrive/SharePoint no es una descarga directa.</strong>
+                  <p>El dashboard esta bien; el bloqueo viene de SharePoint. Streamlit esta en la nube y no puede usar la sesion que tienes abierta en Chrome.</p>
+                  <ul>
+                    <li><b>Camino inmediato:</b> usa el boton Subir y carga el Excel.</li>
+                    <li><b>Camino automatico:</b> el area de TI debe permitir un enlace de descarga anonima o entregar credenciales Microsoft Graph para leer el archivo.</li>
+                    <li><b>Camino local:</b> si el sistema corre en tu PC, ahi si puede leer una ruta de OneDrive sincronizada.</li>
+                  </ul>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
     else:
         st.markdown(
             """
