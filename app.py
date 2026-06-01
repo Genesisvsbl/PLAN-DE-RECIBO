@@ -2618,9 +2618,9 @@ function renderStatusDetail(rows, activeDay="") {
       const programada = Number(row["CANTIDAD PROGRAMADA"] || 0);
       const recibida = Number(row["CANTIDAD RECIBIDA"] || 0);
       const esGr = row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR";
-      const tieneDiferencia = !esGr && Math.abs(programada - recibida) > 0.001;
       const type = tipoCita(row);
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
+      const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
       return {
         _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
@@ -2657,9 +2657,9 @@ function renderStatusDetail(rows, activeDay="") {
       const programada = Number(row["CANTIDAD PROGRAMADA"] || 0);
       const recibida = Number(row["CANTIDAD RECIBIDA"] || 0);
       const esGr = row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR";
-      const tieneDiferencia = !esGr && Math.abs(programada - recibida) > 0.001;
       const type = tipoCita(row);
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
+      const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
       return {
         _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
