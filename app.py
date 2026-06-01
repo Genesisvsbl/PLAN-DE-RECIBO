@@ -1750,8 +1750,10 @@ HTML = r"""<!doctype html>
             <label>Año<select id="focusYear"><option value="">Todos</option></select></label>
             <label>Mes<select id="focusMonth"><option value="">Todos</option></select></label>
             <label>Material<select id="focusMaterial"><option value="">Todos</option></select></label>
+            <label>Proveedor<select id="focusProvider"><option value="">Todos</option></select></label>
             <label>Semana<select id="focusWeek"><option value="">Todas</option></select></label>
             <label>SKU<select id="focusSku"><option value="">Todos</option></select></label>
+            <label>Consulta<input id="focusSearch" type="search" placeholder="SKU, material, proveedor..." /></label>
           </div>
         </div>
         <div class="focus-top">
@@ -1906,9 +1908,10 @@ function buildFilters() {
   ["progFrom", "progTo", "estFrom", "estTo", "repFrom", "repTo"].forEach(id => {
     document.getElementById(id).onchange = applyFilters;
   });
-  ["focusYear", "focusMonth", "focusMaterial", "focusWeek", "focusSku"].forEach(id => {
+  ["focusYear", "focusMonth", "focusMaterial", "focusProvider", "focusWeek", "focusSku", "focusSearch"].forEach(id => {
     document.getElementById(id).onchange = () => renderWeeklyFocus(dataset.rows);
   });
+  document.getElementById("focusSearch").oninput = () => renderWeeklyFocus(dataset.rows);
   ["docCauseFrom", "docCauseTo", "docCauseProvider", "docCauseSector", "physicalCauseFrom", "physicalCauseTo", "physicalCauseProvider", "physicalCauseSector"].forEach(id => {
     document.getElementById(id).onchange = () => renderProviderModule(dataset.rows);
   });
@@ -2703,10 +2706,34 @@ function materialFocus(value, materialText="") {
 
 function renderWeeklyFocus(rows) {
   rows = dataset ? dataset.rows : rows;
+  const currentYear = document.getElementById("focusYear").value;
+  const currentMonth = document.getElementById("focusMonth").value;
+  const currentMaterial = document.getElementById("focusMaterial").value;
+  const currentProvider = document.getElementById("focusProvider").value;
+  const currentWeek = document.getElementById("focusWeek").value;
+  const currentSku = document.getElementById("focusSku").value;
+  const currentQuery = document.getElementById("focusSearch").value.trim().toLowerCase();
   const map = new Map();
-  rows.forEach(row => {
+  const focusRows = rows.filter(row => {
     const group = materialFocus(row["TIPO MATERIAL"], row["MATERIAL"]);
-    if (!group) return;
+    if (!group) return false;
+    const week = row["SEMANA MATERIAL"] || row["SEMANA CONTROL"] || "Sin semana";
+    if (currentYear && String(row["ANO CONTROL"] || "") !== currentYear) return false;
+    if (currentMonth && String(row["MES CONTROL"] || "") !== currentMonth) return false;
+    if (currentMaterial && group !== currentMaterial) return false;
+    if (currentProvider && String(row.PROVEEDOR || "") !== currentProvider) return false;
+    if (currentWeek && week !== currentWeek) return false;
+    if (currentSku && String(row.SKU || "") !== currentSku) return false;
+    if (currentQuery) {
+      const haystack = [row.SKU, row.MATERIAL, row["TIPO MATERIAL"], row.PROVEEDOR, row["CODIGO CITA"], row["N DOCUMENTO"], row.PLACA]
+        .map(value => String(value || "").toLowerCase())
+        .join(" ");
+      if (!haystack.includes(currentQuery)) return false;
+    }
+    return true;
+  });
+  focusRows.forEach(row => {
+    const group = materialFocus(row["TIPO MATERIAL"], row["MATERIAL"]);
     const week = row["SEMANA MATERIAL"] || row["SEMANA CONTROL"] || "Sin semana";
     const year = String(row["ANO CONTROL"] || "");
     const month = String(row["MES CONTROL"] || "");
@@ -2723,20 +2750,12 @@ function renderWeeklyFocus(rows) {
     if (row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR") item.graneles += 1;
   });
   let data = [...map.values()].sort((a,b) => `${a.semana}-${a.material}`.localeCompare(`${b.semana}-${b.material}`));
-  const year = document.getElementById("focusYear").value;
-  const month = document.getElementById("focusMonth").value;
-  const material = document.getElementById("focusMaterial").value;
-  const week = document.getElementById("focusWeek").value;
   syncFocusYears(data);
-  syncFocusMonths(data, year);
+  syncFocusMonths(data, currentYear);
   syncFocusMaterials(data);
-  syncFocusWeeks(data, year, month);
-  syncFocusSkus(rows, material, week, year, month);
-  const sku = document.getElementById("focusSku").value;
-  if (year) data = data.filter(item => item.year === year);
-  if (month) data = data.filter(item => item.month === month);
-  if (material) data = data.filter(item => item.material === material);
-  if (week) data = data.filter(item => item.semana === week);
+  syncFocusProviders(rows, currentYear, currentMonth, currentMaterial);
+  syncFocusWeeks(data, currentYear, currentMonth);
+  syncFocusSkus(rows, currentMaterial, currentWeek, currentYear, currentMonth, currentProvider, currentQuery);
   data = data.slice(-36);
   currentFocusRows = data.map(item => ({
     Semana: item.semana,
@@ -2747,11 +2766,11 @@ function renderWeeklyFocus(rows) {
     Diferencia: item.graneles === item.citas ? "N/A" : item.recibida - item.programada,
     "Cumplimiento %": item.graneles === item.citas ? "N/A" : compliancePct(item.programada, item.recibida)
   }));
-  renderFocusProviderChart("weeklyFocusChart", rows, material, week, sku, year, month);
+  renderFocusProviderChart("weeklyFocusChart", focusRows, "", "", "", "", "");
   renderTable("weeklyFocusTable", currentFocusRows, ["Semana", "Material", "Citas", "Cantidad programada", "Cantidad recibida", "Diferencia", "Cumplimiento %"]);
   renderFocusStats(currentFocusRows);
-  renderFocusDetailTable(rows, material, week, sku, year, month);
-  renderFocusAgenda(rows, material, week, sku, year, month);
+  renderFocusDetailTable(focusRows, "", "", "", "", "");
+  renderFocusAgenda(focusRows, "", "", "", "", "");
 }
 
 function renderFocusStats(rows) {
@@ -2796,6 +2815,23 @@ function syncFocusMonths(data, selectedYear) {
   const months = [...new Set(values.map(item => item.month).filter(Boolean))].sort();
   select.innerHTML = `<option value="">Todos</option>` + months.map(v => `<option>${escapeHtml(v)}</option>`).join("");
   if (months.includes(current)) select.value = current;
+}
+
+function syncFocusProviders(rows, selectedYear="", selectedMonth="", selectedMaterial="") {
+  const select = document.getElementById("focusProvider");
+  const current = select.value;
+  const providers = new Set();
+  rows.forEach(row => {
+    const group = materialFocus(row["TIPO MATERIAL"], row["MATERIAL"]);
+    if (!group) return;
+    if (selectedYear && String(row["ANO CONTROL"] || "") !== selectedYear) return;
+    if (selectedMonth && String(row["MES CONTROL"] || "") !== selectedMonth) return;
+    if (selectedMaterial && group !== selectedMaterial) return;
+    if (row.PROVEEDOR) providers.add(String(row.PROVEEDOR));
+  });
+  const values = [...providers].sort((a,b) => a.localeCompare(b));
+  select.innerHTML = `<option value="">Todos</option>` + values.map(v => `<option>${escapeHtml(v)}</option>`).join("");
+  if (values.includes(current)) select.value = current;
 }
 
 function renderFocusDetailTable(rows, selectedMaterial, selectedWeek, selectedSku, selectedYear, selectedMonth) {
@@ -2986,7 +3022,7 @@ function syncFocusWeeks(data, selectedYear="", selectedMonth="") {
   if (weeks.includes(current)) select.value = current;
 }
 
-function syncFocusSkus(rows, selectedMaterial, selectedWeek, selectedYear="", selectedMonth="") {
+function syncFocusSkus(rows, selectedMaterial, selectedWeek, selectedYear="", selectedMonth="", selectedProvider="", selectedQuery="") {
   const select = document.getElementById("focusSku");
   const current = select.value;
   const skus = new Set();
@@ -2997,7 +3033,14 @@ function syncFocusSkus(rows, selectedMaterial, selectedWeek, selectedYear="", se
     if (selectedYear && String(row["ANO CONTROL"] || "") !== selectedYear) return;
     if (selectedMonth && String(row["MES CONTROL"] || "") !== selectedMonth) return;
     if (selectedMaterial && group !== selectedMaterial) return;
+    if (selectedProvider && String(row.PROVEEDOR || "") !== selectedProvider) return;
     if (selectedWeek && week !== selectedWeek) return;
+    if (selectedQuery) {
+      const haystack = [row.SKU, row.MATERIAL, row["TIPO MATERIAL"], row.PROVEEDOR, row["CODIGO CITA"], row["N DOCUMENTO"], row.PLACA]
+        .map(value => String(value || "").toLowerCase())
+        .join(" ");
+      if (!haystack.includes(selectedQuery)) return;
+    }
     if (row.SKU !== "" && row.SKU != null) skus.add(String(row.SKU));
   });
   const values = [...skus].sort((a,b) => a.localeCompare(b, undefined, { numeric:true }));

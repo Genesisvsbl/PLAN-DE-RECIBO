@@ -1,4 +1,6 @@
 import json
+import io
+import urllib.request
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -95,12 +97,32 @@ else:
         type=["xlsm", "xlsx", "xls"],
         label_visibility="collapsed",
     )
+    remote_url = st.text_input(
+        "URL compartida de OneDrive",
+        placeholder="Pega aqui el enlace compartido del archivo si no lo quieres subir manualmente",
+        label_visibility="collapsed",
+    )
+    refresh_from_url = st.button("Actualizar desde ruta", type="primary", use_container_width=False)
     if uploaded:
         try:
             st.session_state["dataset"] = analyze(uploaded, uploaded.name)
             st.rerun()
         except Exception as exc:
             st.error(f"No pude procesar el archivo: {exc}")
+    elif refresh_from_url and remote_url:
+        try:
+            url = remote_url.strip()
+            if "download=1" not in url:
+                joiner = "&" if "?" in url else "?"
+                url = f"{url}{joiner}download=1"
+            with urllib.request.urlopen(url, timeout=30) as response:
+                content = response.read()
+            file_obj = io.BytesIO(content)
+            file_name = remote_url.rstrip("/").split("/")[-1] or "PLAN_DE_RECIBO.xlsx"
+            st.session_state["dataset"] = analyze(file_obj, file_name)
+            st.rerun()
+        except Exception as exc:
+            st.error(f"No pude leer la ruta de OneDrive. Usa un enlace compartido con permiso de descarga. Detalle: {exc}")
     else:
         st.markdown(
             """
@@ -108,7 +130,7 @@ else:
               <section class="landing-card">
                 <div class="landing-badge">PLAN DE RECIBO 2026.2</div>
                 <h1>Importa tu archivo para generar el dashboard</h1>
-                <p>Sube el Excel en el control superior. El sistema genera los modulos de Indicadores, Proveedores, Recibo, Conciliacion y Base.</p>
+                <p>Sube el Excel en el control superior o pega un enlace compartido de OneDrive. El sistema genera los modulos de Indicadores, Proveedores, Recibo, Conciliacion y Base.</p>
               </section>
             </div>
             """,
