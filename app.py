@@ -1397,8 +1397,29 @@ HTML = r"""<!doctype html>
       font-weight:950;
       white-space:nowrap;
     }
+    .status-chip.ATENCION,
     .status-chip.EN_ATENCION { background:#fff3d6; color:#b66b00; border:1px solid #ffd580; }
     .status-chip.PENDIENTE { background:#e9f1fb; color:#24415f; border:1px solid #c8d7ea; }
+    #statusDetailTable tbody tr.status-recibido:not(.qty-alert) td {
+      background:#f2fbf6;
+    }
+    #statusDetailTable tbody tr.status-recibido:not(.qty-alert) td:first-child {
+      border-left:4px solid #16a34a;
+    }
+    #statusDetailTable tbody tr.status-atencion:not(.qty-alert) td {
+      background:#fff9ec;
+      color:#7c4a03;
+    }
+    #statusDetailTable tbody tr.status-atencion:not(.qty-alert) td:first-child {
+      border-left:4px solid #f59e0b;
+    }
+    #statusDetailTable tbody tr.status-pendiente:not(.qty-alert) td {
+      background:#f3f8ff;
+      color:#18395f;
+    }
+    #statusDetailTable tbody tr.status-pendiente:not(.qty-alert) td:first-child {
+      border-left:4px solid #1768f2;
+    }
     .doc-ok, .doc-bad { width:20px; height:20px; border-width:2px; }
     .provider-cause-card { min-height:620px; grid-column:span 6; }
     .provider-cause-card svg { height:auto; }
@@ -2042,7 +2063,7 @@ function citaStatusSummary(rows) {
 function statusItemsFromRows(rows) {
   return Object.entries(citaStatusSummary(rows))
     .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => ({"PENDIENTE": 1, "EN ATENCION": 2, "RECIBIDO": 3}[a.name] || 9) - ({"PENDIENTE": 1, "EN ATENCION": 2, "RECIBIDO": 3}[b.name] || 9));
+    .sort((a, b) => statusSortValue(a.name) - statusSortValue(b.name));
 }
 
 function uniqueCitas(rows) {
@@ -2527,6 +2548,20 @@ function displayLabel(text) {
   return raw;
 }
 
+function statusSortValue(text) {
+  const raw = String(text || "").trim().toUpperCase();
+  return ({ RECIBIDO: 1, ATENCION: 2, "EN ATENCION": 2, PENDIENTE: 3 })[raw] || 9;
+}
+
+function statusClass(text) {
+  const raw = String(text || "").trim().toUpperCase();
+  if (raw === "EN ATENCION") return "status-atencion";
+  if (raw === "ATENCION") return "status-atencion";
+  if (raw === "RECIBIDO") return "status-recibido";
+  if (raw === "PENDIENTE") return "status-pendiente";
+  return "";
+}
+
 function getActiveDay(rows) {
   const estFrom = document.getElementById("estFrom")?.value || "";
   const estTo = document.getElementById("estTo")?.value || "";
@@ -2575,7 +2610,8 @@ function hourSortValue(label) {
 function renderStatusDetail(rows, activeDay="") {
   const detail = rows
     .slice()
-    .sort((a,b) => typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
+    .sort((a,b) => statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
+      || typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
       || hourSortValue(hourLabel(a["HORA ARRIBO"] || a["HORA RECIBO"])) - hourSortValue(hourLabel(b["HORA ARRIBO"] || b["HORA RECIBO"]))
       || String(a.PROVEEDOR || "").localeCompare(String(b.PROVEEDOR || "")))
     .map(row => {
@@ -2584,9 +2620,10 @@ function renderStatusDetail(rows, activeDay="") {
       const esGr = row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR";
       const tieneDiferencia = !esGr && Math.abs(programada - recibida) > 0.001;
       const type = tipoCita(row);
+      const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       return {
-        _rowClass: `${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
-        Estado: displayLabel(row["ESTADO VEHICULO"] || ""),
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
+        Estado: estado,
         Tipo: type,
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
         "Hora prog.": shortTime(row["HORA ARRIBO"]),
@@ -2612,7 +2649,8 @@ function renderStatusDetail(rows, activeDay="") {
 function renderStatusDetail(rows, activeDay="") {
   const detail = rows
     .slice()
-    .sort((a,b) => typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
+    .sort((a,b) => statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
+      || typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
       || hourSortValue(hourLabel(a["HORA ARRIBO"] || a["HORA RECIBO"])) - hourSortValue(hourLabel(b["HORA ARRIBO"] || b["HORA RECIBO"]))
       || String(a.PROVEEDOR || "").localeCompare(String(b.PROVEEDOR || "")))
     .map(row => {
@@ -2623,7 +2661,7 @@ function renderStatusDetail(rows, activeDay="") {
       const type = tipoCita(row);
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       return {
-        _rowClass: `${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
         Tipo: type,
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
