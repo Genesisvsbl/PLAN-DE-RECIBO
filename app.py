@@ -1399,6 +1399,7 @@ HTML = r"""<!doctype html>
     }
     .status-chip.ATENCION,
     .status-chip.EN_ATENCION { background:#fff3d6; color:#b66b00; border:1px solid #ffd580; }
+    .status-chip.PEND,
     .status-chip.PENDIENTE { background:#e9f1fb; color:#24415f; border:1px solid #c8d7ea; }
     #statusDetailTable tbody tr.status-recibido:not(.qty-alert) td {
       background:#f2fbf6;
@@ -1923,8 +1924,12 @@ function buildFilters() {
     const col = select.dataset.filter;
     const values = dataset.filters[col] || [];
     select.innerHTML = `<option value="">Todos</option>` + values.map(v => `<option>${escapeHtml(v)}</option>`).join("");
-    select.onchange = applyFilters;
+    select.onchange = () => {
+      if (col === "ANO CONTROL" || col === "MES CONTROL") syncWeekFilter();
+      applyFilters();
+    };
   });
+  syncWeekFilter();
   document.getElementById("search").oninput = applyFilters;
   ["progFrom", "progTo", "estFrom", "estTo", "repFrom", "repTo"].forEach(id => {
     document.getElementById(id).onchange = applyFilters;
@@ -1953,6 +1958,24 @@ function buildFilters() {
   document.querySelectorAll("[data-module-icon]").forEach(item => {
     item.innerHTML = iconSvg(item.dataset.moduleIcon);
   });
+}
+
+function syncWeekFilter() {
+  const weekSelect = document.querySelector('[data-filter="SEMANA CONTROL"]');
+  if (!weekSelect || !dataset?.rows) return;
+  const selectedYear = selectedFilterValue("ANO CONTROL");
+  const selectedMonth = selectedFilterValue("MES CONTROL");
+  const currentWeek = weekSelect.value;
+  const weeks = new Set();
+  dataset.rows.forEach(row => {
+    if (selectedYear && String(row["ANO CONTROL"] || "") !== selectedYear) return;
+    if (selectedMonth && String(row["MES CONTROL"] || "") !== selectedMonth) return;
+    const week = String(row["SEMANA CONTROL"] || "").trim();
+    if (week) weeks.add(week);
+  });
+  const values = [...weeks].sort((a,b) => a.localeCompare(b, undefined, { numeric:true }));
+  weekSelect.innerHTML = `<option value="">Todos</option>` + values.map(v => `<option>${escapeHtml(v)}</option>`).join("");
+  weekSelect.value = values.includes(currentWeek) ? currentWeek : "";
 }
 
 function setActivePage(page) {
@@ -2545,12 +2568,13 @@ function shortDate(value) {
 function displayLabel(text) {
   const raw = String(text || "");
   if (raw === "EN ATENCION") return "ATENCION";
+  if (raw === "PENDIENTE") return "PEND";
   return raw;
 }
 
 function statusSortValue(text) {
   const raw = String(text || "").trim().toUpperCase();
-  return ({ RECIBIDO: 1, ATENCION: 2, "EN ATENCION": 2, PENDIENTE: 3 })[raw] || 9;
+  return ({ RECIBIDO: 1, ATENCION: 2, "EN ATENCION": 2, PEND: 3, PENDIENTE: 3 })[raw] || 9;
 }
 
 function statusClass(text) {
@@ -2558,6 +2582,7 @@ function statusClass(text) {
   if (raw === "EN ATENCION") return "status-atencion";
   if (raw === "ATENCION") return "status-atencion";
   if (raw === "RECIBIDO") return "status-recibido";
+  if (raw === "PEND") return "status-pendiente";
   if (raw === "PENDIENTE") return "status-pendiente";
   return "";
 }
