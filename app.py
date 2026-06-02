@@ -780,7 +780,7 @@ HTML = r"""<!doctype html>
     .provider-cause-card table { min-width:0; table-layout:fixed; }
     .provider-cause-card th, .provider-cause-card td { padding:5px 6px; font-size:9px; white-space:normal; overflow-wrap:anywhere; line-height:1.18; }
     .provider-cause-card .actions { margin:0 0 8px; align-items:flex-start; display:block; }
-    .provider-cause-card .mini-filters { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:8px; align-items:end; }
+    .provider-cause-card .mini-filters { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; align-items:end; }
     .provider-cause-card .mini-filters label { min-width:0; font-size:9px; }
     .cause-filter-btn { height:32px; padding:8px 12px; border-radius:7px; }
     .cause-stats { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; margin:14px 0; }
@@ -1749,9 +1749,9 @@ HTML = r"""<!doctype html>
         <div class="actions">
           <h2><span class="module-badge" data-icon="alert"></span>Causal fisica</h2>
           <div class="mini-filters">
+            <label>Fecha filtro<select id="physicalCauseDateMode"><option value="recibo">Recibo</option><option value="arribo">Arribo</option></select></label>
             <label>Desde<input id="physicalCauseFrom" type="date" /></label>
             <label>Hasta<input id="physicalCauseTo" type="date" /></label>
-            <label>Fecha por<select id="physicalCauseDateMode"><option value="recibo">Recibo</option><option value="arribo">Arribo</option></select></label>
             <label>Proveedor<select id="physicalCauseProvider"><option value="">Todos</option></select></label>
             <label>Sector<select id="physicalCauseSector"><option value="">Todos</option></select></label>
             <button class="cause-filter-btn" type="button">Filtrar</button>
