@@ -1067,6 +1067,17 @@ HTML = r"""<!doctype html>
     tbody tr.qty-alert td:first-child {
       border-left:4px solid #dc2626 !important;
     }
+    tbody tr.novelty-alert td,
+    tbody tr.novelty-alert:nth-child(even) td,
+    tbody tr.novelty-alert:hover td {
+      background:#fff0f2 !important;
+      border-bottom-color:#ffc9d0 !important;
+      color:#8f0f16 !important;
+      font-weight:900;
+    }
+    tbody tr.novelty-alert td:first-child {
+      border-left:4px solid #dc2626 !important;
+    }
     tbody tr.type-mp td { background:#f7fbff; }
     tbody tr.type-gr td { background:#f3f8ff; }
     tbody tr.type-bts td { background:#fff8ed; }
@@ -2250,6 +2261,7 @@ function renderCauseBlock(rows, config) {
         if (countKey) docCausePairs.add(countKey);
       }
       details.push({
+        _rowClass: "novelty-alert",
         [config.label]: cause,
         Proveedor: row.PROVEEDOR || "Sin proveedor",
         Material: row.MATERIAL || "",
