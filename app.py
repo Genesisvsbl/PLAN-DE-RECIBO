@@ -524,7 +524,6 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
     agenda_cols = [
         "DIA ENTREGA",
         "CODIGO CITA",
-        "TIPO DE CITA",
         "ESTADO CONTROL",
         "ESTADO VEHICULO",
         "TIPO MATERIAL",
@@ -545,7 +544,6 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
         "FECHA REPROGRAMADA",
         "DIA ENTREGA",
         "CODIGO CITA",
-        "TIPO DE CITA",
         "ESTADO CONTROL",
         "ESTADO VEHICULO",
         "TIPO MATERIAL",
@@ -611,7 +609,6 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
         "DOCUMENTACION",
         "CUMPLE CANTIDAD",
         "CITA TRAFFIC",
-        "TIPO DE CITA",
     ]:
         filters[col] = sorted([str(v) for v in df_for_json[col].unique() if str(v)])
 

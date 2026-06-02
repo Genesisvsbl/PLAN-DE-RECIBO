@@ -6,6 +6,8 @@ import streamlit.components.v1 as components
 
 from app import HTML, analyze, make_json_safe
 
+APP_DATA_VERSION = "plan-recibo-parser-2026-06-02-v2"
+
 
 st.set_page_config(
     page_title="Plan de Recibo",
@@ -13,6 +15,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+if st.session_state.get("app_data_version") != APP_DATA_VERSION:
+    st.session_state.pop("dataset", None)
+    st.session_state["app_data_version"] = APP_DATA_VERSION
 
 st.markdown(
     """
