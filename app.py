@@ -782,6 +782,10 @@ HTML = r"""<!doctype html>
     .provider-cause-card .actions { margin:0 0 8px; align-items:flex-start; display:block; }
     .provider-cause-card .mini-filters { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; align-items:end; }
     .provider-cause-card .mini-filters label { min-width:0; font-size:9px; }
+    .provider-cause-card .date-mode-strip { display:flex; align-items:center; gap:10px; margin:0 0 10px; padding:8px 10px; border:1px solid #bfdbfe; border-radius:12px; background:#eff6ff; color:#082552; }
+    .provider-cause-card .date-mode-strip strong { font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+    .provider-cause-card .date-mode-strip select { width:160px; height:34px; border:1px solid #9ec5fe; border-radius:9px; background:#fff; color:#082552; font-weight:900; padding:0 10px; }
+    .provider-cause-card .date-mode-strip span { font-size:11px; font-weight:800; color:#355070; }
     .cause-filter-btn { height:32px; padding:8px 12px; border-radius:7px; }
     .cause-stats { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; margin:14px 0; }
     .cause-stat { position:relative; min-height:62px; border:1px solid #e2e9f3; border-radius:8px; padding:10px 8px 8px 48px; background:#fff; box-shadow:0 8px 18px rgba(15,23,42,.035); }
@@ -1748,8 +1752,12 @@ HTML = r"""<!doctype html>
       <div class="panel provider-cause-card" data-page="proveedores">
         <div class="actions">
           <h2><span class="module-badge" data-icon="alert"></span>Causal fisica</h2>
+          <div class="date-mode-strip">
+            <strong>Filtrar por fecha</strong>
+            <select id="physicalCauseDateMode"><option value="recibo">Recibo</option><option value="arribo">Arribo</option></select>
+            <span>Usa Arribo cuando la novedad no tenga fecha de recibo.</span>
+          </div>
           <div class="mini-filters">
-            <label>Fecha filtro<select id="physicalCauseDateMode"><option value="recibo">Recibo</option><option value="arribo">Arribo</option></select></label>
             <label>Desde<input id="physicalCauseFrom" type="date" /></label>
             <label>Hasta<input id="physicalCauseTo" type="date" /></label>
             <label>Proveedor<select id="physicalCauseProvider"><option value="">Todos</option></select></label>
