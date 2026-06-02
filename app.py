@@ -778,7 +778,7 @@ HTML = r"""<!doctype html>
     .cause-chart-scroll svg { height:auto; min-height:220px; }
     .provider-cause-card .compact { max-height:210px; margin-top:0; }
     .provider-cause-card table { min-width:0; table-layout:fixed; }
-    .provider-cause-card th, .provider-cause-card td { padding:4px 4px; font-size:7.4px; white-space:normal; overflow-wrap:anywhere; line-height:1.08; }
+    .provider-cause-card th, .provider-cause-card td { padding:3px 3px; font-size:6.4px; white-space:normal; overflow-wrap:anywhere; line-height:1.02; }
     .provider-cause-card .actions { margin:0 0 8px; align-items:flex-start; display:block; }
     .provider-cause-card .mini-filters { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; align-items:end; }
     .provider-cause-card .mini-filters label { min-width:0; font-size:9px; }
