@@ -2338,8 +2338,21 @@ function extractCauses(row, config) {
   }
   const value = String(row[config.field] || "").trim();
   const normalized = value.toUpperCase();
-  if (!value || normalized === "NO" || normalized === "OK" || normalized === "SIN NOVEDAD") return [];
-  return [value];
+  if (value && normalized !== "NO" && normalized !== "OK" && normalized !== "SIN NOVEDAD") return [value];
+  if (config.field === "CAUSAL NOVEDAD FISICA") {
+    const novelty = String(row["NOVEDAD RECIBO"] || "").trim().toUpperCase();
+    const obs = String(row.OBSERVACIONES || "").trim();
+    const programada = Number(row["CANTIDAD PROGRAMADA"] || 0);
+    const recibida = Number(row["CANTIDAD RECIBIDA"] || 0);
+    const esGr = row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR";
+    const estado = displayLabel(row["ESTADO VEHICULO"] || "");
+    if (!esGr && estado === "RECIBIDO" && programada > 0 && recibida === 0) return ["Recibido sin cantidad"];
+    if (["SI", "SÍ", "YES", "1"].includes(novelty)) {
+      if (obs && obs.toUpperCase() !== "OK") return [obs];
+      return ["Con novedad fisica sin causal"];
+    }
+  }
+  return [];
 }
 
 function renderCauseProvider(rows) {
