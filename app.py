@@ -503,6 +503,7 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
     today_with_code = today_total
     today_code_rate = round(100 * today_with_code / max(today_total, 1), 1)
     additional_total = int(df.loc[df["TIPO DE CITA"].eq("ADICIONAL"), "CITA KPI"].replace("", pd.NA).nunique())
+    scheduled_total = int(df.loc[df["TIPO DE CITA"].eq("PROGRAMADO"), "CITA KPI"].replace("", pd.NA).nunique())
     today_additional = int(df.loc[today_mask & df["TIPO DE CITA"].eq("ADICIONAL"), "CITA KPI"].replace("", pd.NA).nunique())
 
     month = (
@@ -633,6 +634,7 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
             "todayTrafficTotal": today_total,
             "todayTrafficWithCode": today_with_code,
             "todayTrafficRate": today_code_rate,
+            "scheduledTotal": scheduled_total,
             "additionalTotal": additional_total,
             "todayAdditional": today_additional,
             "missingDocPlate": missing_doc + missing_plate,
@@ -1125,6 +1127,16 @@ HTML = r"""<!doctype html>
     tbody tr.type-mp td:first-child { border-left:4px solid #16a34a; }
     tbody tr.type-gr td:first-child { border-left:4px solid #0a5df0; }
     tbody tr.type-bts td:first-child { border-left:4px solid #f59e0b; }
+    tbody tr.cita-adicional td,
+    tbody tr.cita-adicional:nth-child(even) td,
+    tbody tr.cita-adicional:hover td {
+      background:#fff7ed !important;
+      border-bottom-color:#fed7aa !important;
+      color:#7c2d12 !important;
+    }
+    tbody tr.cita-adicional td:first-child {
+      border-left:4px solid #f59e0b !important;
+    }
     .status-chip, .pill {
       border-radius:999px;
       padding:4px 8px;
@@ -1264,8 +1276,8 @@ HTML = r"""<!doctype html>
     }
     .nav-tabs button::after { left:19px; width:7px; height:7px; border-color:#0a5df0; }
     .kpis {
-      grid-template-columns:repeat(6, minmax(0, 1fr));
-      gap:12px;
+      grid-template-columns:repeat(8, minmax(0, 1fr));
+      gap:10px;
       margin:12px 0 14px;
     }
     .kpi {
@@ -1274,8 +1286,14 @@ HTML = r"""<!doctype html>
       border:1px solid var(--premium-line);
       background:linear-gradient(180deg, #fff 0%, #f8fbff 100%);
       box-shadow:0 18px 38px rgba(4,19,38,.075);
-      padding:17px 12px 13px 72px;
+      padding:15px 10px 12px 62px;
       overflow:hidden;
+    }
+    .kpi.extra {
+      border-color:#fed7aa;
+    }
+    .kpi.extra::after {
+      background:#f59e0b;
     }
     .kpi::after {
       display:block;
@@ -1567,25 +1585,6 @@ HTML = r"""<!doctype html>
     .type-chip.MP { background:#dcf7ea; color:#08723e; border:1px solid #9ce3bd; }
     .type-chip.GR { background:#e8f1ff; color:#0748b2; border:1px solid #b8d2ff; }
     .type-chip.BTS { background:#fff0d8; color:#a85a00; border:1px solid #ffd390; }
-    .plan-chip {
-      display:inline-block;
-      min-width:62px;
-      padding:4px 7px;
-      border-radius:999px;
-      font-size:7.5px;
-      font-weight:950;
-      text-align:center;
-      line-height:1;
-      white-space:nowrap;
-      background:#eef6ff;
-      color:#0b4aa2;
-      border:1px solid #bcd7ff;
-    }
-    .plan-chip.ADICIONAL {
-      background:#fff0d8;
-      color:#a85a00;
-      border-color:#ffd390;
-    }
     .focus-section .table-wrap { border-radius:12px; }
     .focus-section th, .focus-section td {
       font-size:8.8px;
@@ -1656,20 +1655,19 @@ HTML = r"""<!doctype html>
     }
     #statusDetailTable th:nth-child(1), #statusDetailTable td:nth-child(1) { width:5%; }
     #statusDetailTable th:nth-child(2), #statusDetailTable td:nth-child(2) { width:4%; }
-    #statusDetailTable th:nth-child(3), #statusDetailTable td:nth-child(3) { width:6%; }
-    #statusDetailTable th:nth-child(4), #statusDetailTable td:nth-child(4) { width:5%; }
-    #statusDetailTable th:nth-child(5), #statusDetailTable td:nth-child(5),
-    #statusDetailTable th:nth-child(6), #statusDetailTable td:nth-child(6) { width:4%; }
-    #statusDetailTable th:nth-child(7), #statusDetailTable td:nth-child(7) { width:11%; }
-    #statusDetailTable th:nth-child(8), #statusDetailTable td:nth-child(8) { width:7%; }
-    #statusDetailTable th:nth-child(9), #statusDetailTable td:nth-child(9) { width:5%; }
-    #statusDetailTable th:nth-child(10), #statusDetailTable td:nth-child(10) { width:21%; }
-    #statusDetailTable th:nth-child(11), #statusDetailTable td:nth-child(11),
-    #statusDetailTable th:nth-child(12), #statusDetailTable td:nth-child(12) { width:5%; }
-    #statusDetailTable th:nth-child(13), #statusDetailTable td:nth-child(13) { width:3%; }
-    #statusDetailTable th:nth-child(14), #statusDetailTable td:nth-child(14) { width:5%; }
-    #statusDetailTable th:nth-child(15), #statusDetailTable td:nth-child(15) { width:4%; }
-    #statusDetailTable th:nth-child(16), #statusDetailTable td:nth-child(16) { width:6%; }
+    #statusDetailTable th:nth-child(3), #statusDetailTable td:nth-child(3) { width:5%; }
+    #statusDetailTable th:nth-child(4), #statusDetailTable td:nth-child(4),
+    #statusDetailTable th:nth-child(5), #statusDetailTable td:nth-child(5) { width:4%; }
+    #statusDetailTable th:nth-child(6), #statusDetailTable td:nth-child(6) { width:12%; }
+    #statusDetailTable th:nth-child(7), #statusDetailTable td:nth-child(7) { width:7%; }
+    #statusDetailTable th:nth-child(8), #statusDetailTable td:nth-child(8) { width:5%; }
+    #statusDetailTable th:nth-child(9), #statusDetailTable td:nth-child(9) { width:22%; }
+    #statusDetailTable th:nth-child(10), #statusDetailTable td:nth-child(10),
+    #statusDetailTable th:nth-child(11), #statusDetailTable td:nth-child(11) { width:6%; }
+    #statusDetailTable th:nth-child(12), #statusDetailTable td:nth-child(12) { width:4%; }
+    #statusDetailTable th:nth-child(13), #statusDetailTable td:nth-child(13) { width:5%; }
+    #statusDetailTable th:nth-child(14), #statusDetailTable td:nth-child(14) { width:4%; }
+    #statusDetailTable th:nth-child(15), #statusDetailTable td:nth-child(15) { width:7%; }
     #statusDetailTable .type-chip {
       display:inline-flex;
       align-items:center;
@@ -1967,12 +1965,14 @@ function renderModuleMetrics(data) {
 
 function renderKpis(k) {
   const items = [
+    ["Programadas", k.scheduledTotal ?? Math.max((k.total || 0) - (k.additionalTotal || 0), 0), "", "calendar", "plan"],
+    ["Adicionales", k.additionalTotal || 0, "extra", "alert", "vh extra"],
     ["Total citas", k.total, "", "calendar", "vs dia anterior"],
     ["Recibidos", k.receivedVehicle, "teal", "doc", "vs dia anterior"],
     ["Atención", k.inAttention, "amber", "clock", "vs dia anterior"],
     ["Pendientes", k.pendingVehicle || 0, "", "folder", "vs dia anterior"],
     ["Cumplimiento doc.", `${k.docRate}%`, "purple", "doc", "vs dia anterior"],
-    ["Adicionales", k.additionalTotal || 0, "green", "alert", "extras del filtro"],
+    ["Citas hoy", k.todayTrafficTotal, "green", "user", "vs dia anterior"],
   ];
   document.getElementById("kpis").innerHTML = items.map(([label, value, cls, icon, note]) =>
     `<div class="kpi ${cls}"><i class="kpi-icon">${iconSvg(icon)}</i><span>${label}</span><strong>${typeof value === "number" ? money.format(value) : value}</strong><small>${note}</small></div>`
@@ -2130,8 +2130,10 @@ function renderFilteredKpis() {
   const docComplete = dueRows.filter(row => String(row["N DOCUMENTO"] || "").trim() && (String(row.PLACA || "").trim() || row["ESTADO VEHICULO"] === "PENDIENTE")).length;
   const status = citaStatusSummary(filteredRows);
   const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
+  const scheduledRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "PROGRAMADO").toUpperCase() !== "ADICIONAL");
   const k = {
     total: uniqueCitas(filteredRows).size,
+    scheduledTotal: uniqueCitas(scheduledRows).size,
     receivedVehicle: status["RECIBIDO"] || 0,
     inAttention: status["EN ATENCION"] || 0,
     pendingVehicle: status["PENDIENTE"] || 0,
@@ -2768,11 +2770,11 @@ function renderStatusDetail(rows, activeDay="") {
       const type = tipoCita(row);
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
+      const esAdicional = String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL";
       return {
-        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}${esAdicional ? " cita-adicional" : ""}`,
         Estado: estado,
         Tipo: type,
-        Clase: row["TIPO DE CITA"] || "PROGRAMADO",
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
         "Hora prog.": shortTime(row["HORA ARRIBO"]),
         "Hora est.": shortTime(row["HORA RECIBO"]),
@@ -2791,7 +2793,7 @@ function renderStatusDetail(rows, activeDay="") {
   const title = activeDay ? `Detalle de citas del día - ${formatDateEs(activeDay)}` : "Detalle de citas filtradas";
   document.getElementById("statusDetailTitle").textContent = title;
   document.getElementById("statusDetailCount").textContent = `Total registros: ${fmt.format(detail.length)}`;
-  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Clase", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
+  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
 }
 
 function renderStatusDetail(rows, activeDay="") {
@@ -2808,11 +2810,11 @@ function renderStatusDetail(rows, activeDay="") {
       const type = tipoCita(row);
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
+      const esAdicional = String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL";
       return {
-        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}${esAdicional ? " cita-adicional" : ""}`,
         Estado: estado,
         Tipo: type,
-        Clase: row["TIPO DE CITA"] || "PROGRAMADO",
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
         "Hora prog.": shortTime(row["HORA ARRIBO"]),
         "Hora est.": shortTime(row["HORA RECIBO"]),
@@ -2831,7 +2833,7 @@ function renderStatusDetail(rows, activeDay="") {
   const title = activeDay ? `Detalle de citas del dia - ${formatDateEs(activeDay)}` : "Detalle de citas filtradas";
   document.getElementById("statusDetailTitle").textContent = title;
   document.getElementById("statusDetailCount").textContent = `Total registros: ${fmt.format(detail.length)}`;
-  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Clase", "Cod cita", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
+  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Cod cita", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
 }
 
 function tipoCita(row) {
@@ -3354,7 +3356,6 @@ function renderTable(id, rows, cols) {
 function cellValue(col, value) {
   if (col === "Estado") return `<span class="status-chip ${escapeHtml(String(value).replaceAll(" ", "_"))}">${escapeHtml(value)}</span>`;
   if (col === "TIPO" || col === "Tipo") return `<span class="type-chip ${escapeHtml(value)}">${escapeHtml(value)}</span>`;
-  if (col === "Clase") return `<span class="plan-chip ${escapeHtml(String(value || "PROGRAMADO").toUpperCase())}">${escapeHtml(value || "PROGRAMADO")}</span>`;
   if (col === "Doc. OK") {
     const ok = String(value || "") === "OK";
     const pend = String(value || "") === "PEND";
@@ -3370,7 +3371,6 @@ function cellValue(col, value) {
 function cellValue(col, value) {
   if (col === "Estado") return `<span class="status-chip ${escapeHtml(String(value).replaceAll(" ", "_"))}">${escapeHtml(value)}</span>`;
   if (col === "TIPO" || col === "Tipo") return `<span class="type-chip ${escapeHtml(value)}">${escapeHtml(value)}</span>`;
-  if (col === "Clase") return `<span class="plan-chip ${escapeHtml(String(value || "PROGRAMADO").toUpperCase())}">${escapeHtml(value || "PROGRAMADO")}</span>`;
   if (col === "Doc. OK") {
     const ok = String(value || "") === "OK";
     const pend = String(value || "") === "PEND";
