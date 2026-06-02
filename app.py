@@ -778,7 +778,7 @@ HTML = r"""<!doctype html>
     .cause-chart-scroll svg { height:auto; min-height:220px; }
     .provider-cause-card .compact { max-height:210px; margin-top:0; }
     .provider-cause-card table { min-width:0; table-layout:fixed; }
-    .provider-cause-card th, .provider-cause-card td { padding:5px 6px; font-size:9px; white-space:normal; overflow-wrap:anywhere; line-height:1.18; }
+    .provider-cause-card th, .provider-cause-card td { padding:4px 5px; font-size:8.2px; white-space:normal; overflow-wrap:anywhere; line-height:1.14; }
     .provider-cause-card .actions { margin:0 0 8px; align-items:flex-start; display:block; }
     .provider-cause-card .mini-filters { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; align-items:end; }
     .provider-cause-card .mini-filters label { min-width:0; font-size:9px; }
@@ -2350,7 +2350,18 @@ function extractCauses(row, config) {
   }
   const value = String(row[config.field] || "").trim();
   const normalized = value.toUpperCase();
-  if (value && normalized !== "NO" && normalized !== "OK" && normalized !== "SIN NOVEDAD") return [value];
+  const noNoveltyValues = new Set([
+    "NO",
+    "OK",
+    "SIN NOVEDAD",
+    "SIN NOVEDAD FISICA",
+    "SIN NOVEDAD FÍSICA",
+    "MERCANCIA COMPLETA",
+    "MERCANCÍA COMPLETA",
+    "MERCANCIA COMPLETA.",
+    "MERCANCÍA COMPLETA.",
+  ]);
+  if (value && !noNoveltyValues.has(normalized)) return [value];
   if (config.field === "CAUSAL NOVEDAD FISICA") {
     const novelty = String(row["NOVEDAD RECIBO"] || "").trim().toUpperCase();
     const obs = String(row.OBSERVACIONES || "").trim();
