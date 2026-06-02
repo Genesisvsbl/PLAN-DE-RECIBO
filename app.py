@@ -12,6 +12,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+import unicodedata
 
 import pandas as pd
 import re
@@ -38,6 +39,7 @@ MONTHS_ES = {
 
 SOURCE_HEADERS = [
     "CODIGO CITA",
+    "TIPO DE CITA",
     "CATEGORIA",
     "STATUS",
     "SEMANA",
@@ -186,10 +188,39 @@ def make_json_safe(value: Any) -> Any:
     return value
 
 
+def normalize_header(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"\s+", " ", text).strip().upper()
+    text = text.replace("°", "").replace("º", "")
+    return text
+
+
 def read_plan(file_obj: io.BytesIO | str | Path) -> pd.DataFrame:
     raw = pd.read_excel(file_obj, sheet_name="PLAN DE RECIBO", header=1, engine="openpyxl")
-    df = raw.iloc[:, : len(SOURCE_HEADERS)].copy()
-    df.columns = SOURCE_HEADERS
+    normalized_cols: dict[str, Any] = {}
+    for col in raw.columns:
+        normalized_cols.setdefault(normalize_header(col), col)
+    cantidad_cols = [col for col in raw.columns if normalize_header(col) == "CANTIDAD"]
+    aliases = {
+        "N DOCUMENTO": ["N DOCUMENTO"],
+        "TIPO ENTREGA": ["TIPO ENTREGA"],
+        "REMESA TRANSPORTE": ["REMESA TRANSPORTE"],
+        "FECHA ARRIBO": ["FECHA ARRIBO"],
+        "HORA ARRIBO": ["HORA ARRIBO"],
+        "FECHA RECIBO": ["FECHA RECIBO"],
+        "HORA RECIBO": ["HORA RECIBO"],
+    }
+    df = pd.DataFrame(index=raw.index)
+    for header in SOURCE_HEADERS:
+        if header == "CANTIDAD PROGRAMADA":
+            df[header] = raw[cantidad_cols[0]] if cantidad_cols else ""
+            continue
+        if header == "CANTIDAD RECIBIDA":
+            df[header] = raw[cantidad_cols[1]] if len(cantidad_cols) > 1 else ""
+            continue
+        candidates = aliases.get(header, [header])
+        source_col = next((normalized_cols.get(normalize_header(candidate)) for candidate in candidates if normalized_cols.get(normalize_header(candidate)) is not None), None)
+        df[header] = raw[source_col] if source_col is not None else ""
     reprogram_cols = [col for col in raw.columns if "REPROGRAM" in str(col).upper()]
     df["FECHA REPROGRAMADA"] = raw[reprogram_cols[0]] if reprogram_cols else ""
     for col in df.columns:
@@ -365,6 +396,9 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
     )
     out["CANTIDAD PROGRAMADA"] = pd.to_numeric(out["CANTIDAD PROGRAMADA"], errors="coerce").fillna(0)
     out["CANTIDAD RECIBIDA"] = pd.to_numeric(out["CANTIDAD RECIBIDA"], errors="coerce").fillna(0)
+    out["TIPO DE CITA"] = out["TIPO DE CITA"].astype(str).str.strip().str.upper().replace({"": "PROGRAMADO", "NAN": "PROGRAMADO"})
+    out.loc[out["TIPO DE CITA"].isin(["ADICIONAL", "EXTRA"]), "TIPO DE CITA"] = "ADICIONAL"
+    out.loc[~out["TIPO DE CITA"].isin(["PROGRAMADO", "ADICIONAL"]), "TIPO DE CITA"] = "PROGRAMADO"
     out["ES GRANEL"] = out["TIPO"].astype(str).str.strip().str.upper().eq("GR")
     out["DIF CANTIDAD"] = out["CANTIDAD RECIBIDA"] - out["CANTIDAD PROGRAMADA"]
     out.loc[out["ES GRANEL"], "DIF CANTIDAD"] = 0
@@ -468,6 +502,8 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
     today_total = int(df.loc[today_mask, "CITA KPI"].replace("", pd.NA).nunique())
     today_with_code = today_total
     today_code_rate = round(100 * today_with_code / max(today_total, 1), 1)
+    additional_total = int(df.loc[df["TIPO DE CITA"].eq("ADICIONAL"), "CITA KPI"].replace("", pd.NA).nunique())
+    today_additional = int(df.loc[today_mask & df["TIPO DE CITA"].eq("ADICIONAL"), "CITA KPI"].replace("", pd.NA).nunique())
 
     month = (
         df.groupby("MES ENTREGA", dropna=False)
@@ -487,6 +523,7 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
     agenda_cols = [
         "DIA ENTREGA",
         "CODIGO CITA",
+        "TIPO DE CITA",
         "ESTADO CONTROL",
         "ESTADO VEHICULO",
         "TIPO MATERIAL",
@@ -507,6 +544,7 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
         "FECHA REPROGRAMADA",
         "DIA ENTREGA",
         "CODIGO CITA",
+        "TIPO DE CITA",
         "ESTADO CONTROL",
         "ESTADO VEHICULO",
         "TIPO MATERIAL",
@@ -572,6 +610,7 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
         "DOCUMENTACION",
         "CUMPLE CANTIDAD",
         "CITA TRAFFIC",
+        "TIPO DE CITA",
     ]:
         filters[col] = sorted([str(v) for v in df_for_json[col].unique() if str(v)])
 
@@ -594,6 +633,8 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
             "todayTrafficTotal": today_total,
             "todayTrafficWithCode": today_with_code,
             "todayTrafficRate": today_code_rate,
+            "additionalTotal": additional_total,
+            "todayAdditional": today_additional,
             "missingDocPlate": missing_doc + missing_plate,
             "docDueTotal": due_doc_total,
             "docCompleteTotal": complete_doc_total,
@@ -1526,6 +1567,25 @@ HTML = r"""<!doctype html>
     .type-chip.MP { background:#dcf7ea; color:#08723e; border:1px solid #9ce3bd; }
     .type-chip.GR { background:#e8f1ff; color:#0748b2; border:1px solid #b8d2ff; }
     .type-chip.BTS { background:#fff0d8; color:#a85a00; border:1px solid #ffd390; }
+    .plan-chip {
+      display:inline-block;
+      min-width:62px;
+      padding:4px 7px;
+      border-radius:999px;
+      font-size:7.5px;
+      font-weight:950;
+      text-align:center;
+      line-height:1;
+      white-space:nowrap;
+      background:#eef6ff;
+      color:#0b4aa2;
+      border:1px solid #bcd7ff;
+    }
+    .plan-chip.ADICIONAL {
+      background:#fff0d8;
+      color:#a85a00;
+      border-color:#ffd390;
+    }
     .focus-section .table-wrap { border-radius:12px; }
     .focus-section th, .focus-section td {
       font-size:8.8px;
@@ -1596,19 +1656,20 @@ HTML = r"""<!doctype html>
     }
     #statusDetailTable th:nth-child(1), #statusDetailTable td:nth-child(1) { width:5%; }
     #statusDetailTable th:nth-child(2), #statusDetailTable td:nth-child(2) { width:4%; }
-    #statusDetailTable th:nth-child(3), #statusDetailTable td:nth-child(3) { width:5%; }
-    #statusDetailTable th:nth-child(4), #statusDetailTable td:nth-child(4),
-    #statusDetailTable th:nth-child(5), #statusDetailTable td:nth-child(5) { width:4%; }
-    #statusDetailTable th:nth-child(6), #statusDetailTable td:nth-child(6) { width:12%; }
-    #statusDetailTable th:nth-child(7), #statusDetailTable td:nth-child(7) { width:7%; }
-    #statusDetailTable th:nth-child(8), #statusDetailTable td:nth-child(8) { width:5%; }
-    #statusDetailTable th:nth-child(9), #statusDetailTable td:nth-child(9) { width:22%; }
-    #statusDetailTable th:nth-child(10), #statusDetailTable td:nth-child(10),
-    #statusDetailTable th:nth-child(11), #statusDetailTable td:nth-child(11) { width:6%; }
-    #statusDetailTable th:nth-child(12), #statusDetailTable td:nth-child(12) { width:4%; }
-    #statusDetailTable th:nth-child(13), #statusDetailTable td:nth-child(13) { width:5%; }
-    #statusDetailTable th:nth-child(14), #statusDetailTable td:nth-child(14) { width:4%; }
-    #statusDetailTable th:nth-child(15), #statusDetailTable td:nth-child(15) { width:7%; }
+    #statusDetailTable th:nth-child(3), #statusDetailTable td:nth-child(3) { width:6%; }
+    #statusDetailTable th:nth-child(4), #statusDetailTable td:nth-child(4) { width:5%; }
+    #statusDetailTable th:nth-child(5), #statusDetailTable td:nth-child(5),
+    #statusDetailTable th:nth-child(6), #statusDetailTable td:nth-child(6) { width:4%; }
+    #statusDetailTable th:nth-child(7), #statusDetailTable td:nth-child(7) { width:11%; }
+    #statusDetailTable th:nth-child(8), #statusDetailTable td:nth-child(8) { width:7%; }
+    #statusDetailTable th:nth-child(9), #statusDetailTable td:nth-child(9) { width:5%; }
+    #statusDetailTable th:nth-child(10), #statusDetailTable td:nth-child(10) { width:21%; }
+    #statusDetailTable th:nth-child(11), #statusDetailTable td:nth-child(11),
+    #statusDetailTable th:nth-child(12), #statusDetailTable td:nth-child(12) { width:5%; }
+    #statusDetailTable th:nth-child(13), #statusDetailTable td:nth-child(13) { width:3%; }
+    #statusDetailTable th:nth-child(14), #statusDetailTable td:nth-child(14) { width:5%; }
+    #statusDetailTable th:nth-child(15), #statusDetailTable td:nth-child(15) { width:4%; }
+    #statusDetailTable th:nth-child(16), #statusDetailTable td:nth-child(16) { width:6%; }
     #statusDetailTable .type-chip {
       display:inline-flex;
       align-items:center;
@@ -1911,7 +1972,7 @@ function renderKpis(k) {
     ["Atención", k.inAttention, "amber", "clock", "vs dia anterior"],
     ["Pendientes", k.pendingVehicle || 0, "", "folder", "vs dia anterior"],
     ["Cumplimiento doc.", `${k.docRate}%`, "purple", "doc", "vs dia anterior"],
-    ["Citas hoy", k.todayTrafficTotal, "green", "user", "vs dia anterior"],
+    ["Adicionales", k.additionalTotal || 0, "green", "alert", "extras del filtro"],
   ];
   document.getElementById("kpis").innerHTML = items.map(([label, value, cls, icon, note]) =>
     `<div class="kpi ${cls}"><i class="kpi-icon">${iconSvg(icon)}</i><span>${label}</span><strong>${typeof value === "number" ? money.format(value) : value}</strong><small>${note}</small></div>`
@@ -2068,6 +2129,7 @@ function renderFilteredKpis() {
   const dueRows = filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) <= today);
   const docComplete = dueRows.filter(row => String(row["N DOCUMENTO"] || "").trim() && (String(row.PLACA || "").trim() || row["ESTADO VEHICULO"] === "PENDIENTE")).length;
   const status = citaStatusSummary(filteredRows);
+  const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
   const k = {
     total: uniqueCitas(filteredRows).size,
     receivedVehicle: status["RECIBIDO"] || 0,
@@ -2075,6 +2137,7 @@ function renderFilteredKpis() {
     pendingVehicle: status["PENDIENTE"] || 0,
     docRate: Math.round((docComplete / Math.max(dueRows.length, 1)) * 1000) / 10,
     todayTrafficTotal: uniqueCitas(filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) === today)).size,
+    additionalTotal: uniqueCitas(additionalRows).size,
   };
   renderKpis(k);
   document.getElementById("status").textContent = `${fmt.format(filteredRows.length)} registros filtrados`;
@@ -2709,6 +2772,7 @@ function renderStatusDetail(rows, activeDay="") {
         _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
         Tipo: type,
+        Clase: row["TIPO DE CITA"] || "PROGRAMADO",
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
         "Hora prog.": shortTime(row["HORA ARRIBO"]),
         "Hora est.": shortTime(row["HORA RECIBO"]),
@@ -2727,7 +2791,7 @@ function renderStatusDetail(rows, activeDay="") {
   const title = activeDay ? `Detalle de citas del día - ${formatDateEs(activeDay)}` : "Detalle de citas filtradas";
   document.getElementById("statusDetailTitle").textContent = title;
   document.getElementById("statusDetailCount").textContent = `Total registros: ${fmt.format(detail.length)}`;
-  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
+  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Clase", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
 }
 
 function renderStatusDetail(rows, activeDay="") {
@@ -2748,6 +2812,7 @@ function renderStatusDetail(rows, activeDay="") {
         _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
         Tipo: type,
+        Clase: row["TIPO DE CITA"] || "PROGRAMADO",
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
         "Hora prog.": shortTime(row["HORA ARRIBO"]),
         "Hora est.": shortTime(row["HORA RECIBO"]),
@@ -2766,7 +2831,7 @@ function renderStatusDetail(rows, activeDay="") {
   const title = activeDay ? `Detalle de citas del dia - ${formatDateEs(activeDay)}` : "Detalle de citas filtradas";
   document.getElementById("statusDetailTitle").textContent = title;
   document.getElementById("statusDetailCount").textContent = `Total registros: ${fmt.format(detail.length)}`;
-  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Cod cita", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
+  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Clase", "Cod cita", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
 }
 
 function tipoCita(row) {
@@ -3289,6 +3354,7 @@ function renderTable(id, rows, cols) {
 function cellValue(col, value) {
   if (col === "Estado") return `<span class="status-chip ${escapeHtml(String(value).replaceAll(" ", "_"))}">${escapeHtml(value)}</span>`;
   if (col === "TIPO" || col === "Tipo") return `<span class="type-chip ${escapeHtml(value)}">${escapeHtml(value)}</span>`;
+  if (col === "Clase") return `<span class="plan-chip ${escapeHtml(String(value || "PROGRAMADO").toUpperCase())}">${escapeHtml(value || "PROGRAMADO")}</span>`;
   if (col === "Doc. OK") {
     const ok = String(value || "") === "OK";
     const pend = String(value || "") === "PEND";
@@ -3304,6 +3370,7 @@ function cellValue(col, value) {
 function cellValue(col, value) {
   if (col === "Estado") return `<span class="status-chip ${escapeHtml(String(value).replaceAll(" ", "_"))}">${escapeHtml(value)}</span>`;
   if (col === "TIPO" || col === "Tipo") return `<span class="type-chip ${escapeHtml(value)}">${escapeHtml(value)}</span>`;
+  if (col === "Clase") return `<span class="plan-chip ${escapeHtml(String(value || "PROGRAMADO").toUpperCase())}">${escapeHtml(value || "PROGRAMADO")}</span>`;
   if (col === "Doc. OK") {
     const ok = String(value || "") === "OK";
     const pend = String(value || "") === "PEND";
