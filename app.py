@@ -1751,6 +1751,7 @@ HTML = r"""<!doctype html>
           <div class="mini-filters">
             <label>Desde<input id="physicalCauseFrom" type="date" /></label>
             <label>Hasta<input id="physicalCauseTo" type="date" /></label>
+            <label>Fecha por<select id="physicalCauseDateMode"><option value="recibo">Recibo</option><option value="arribo">Arribo</option></select></label>
             <label>Proveedor<select id="physicalCauseProvider"><option value="">Todos</option></select></label>
             <label>Sector<select id="physicalCauseSector"><option value="">Todos</option></select></label>
             <button class="cause-filter-btn" type="button">Filtrar</button>
@@ -1943,7 +1944,7 @@ function buildFilters() {
     document.getElementById(id).onchange = () => renderWeeklyFocus(dataset.rows);
   });
   document.getElementById("focusSearch").oninput = () => renderWeeklyFocus(dataset.rows);
-  ["docCauseFrom", "docCauseTo", "docCauseProvider", "docCauseSector", "physicalCauseFrom", "physicalCauseTo", "physicalCauseProvider", "physicalCauseSector"].forEach(id => {
+  ["docCauseFrom", "docCauseTo", "docCauseProvider", "docCauseSector", "physicalCauseFrom", "physicalCauseTo", "physicalCauseDateMode", "physicalCauseProvider", "physicalCauseSector"].forEach(id => {
     document.getElementById(id).onchange = () => renderProviderModule(dataset.rows);
   });
   ["concFrom", "concTo", "concTipo", "concProvider"].forEach(id => {
@@ -2182,6 +2183,7 @@ function renderProviderModule(rows) {
     footerId: "physicalCauseFooter",
     providerId: "physicalCauseProvider",
     sectorId: "physicalCauseSector",
+    dateModeId: "physicalCauseDateMode",
     fromId: "physicalCauseFrom",
     toId: "physicalCauseTo",
     mode: "single",
@@ -2208,6 +2210,7 @@ function renderCauseBlock(rows, config) {
   const sectorFilter = document.getElementById(config.sectorId).value;
   const from = document.getElementById(config.fromId).value;
   const to = document.getElementById(config.toId).value;
+  const dateMode = config.dateModeId ? document.getElementById(config.dateModeId).value : "recibo";
   const counts = new Map();
   const details = [];
   let withoutCause = 0;
@@ -2221,7 +2224,7 @@ function renderCauseBlock(rows, config) {
     const sector = row["TIPO MATERIAL"] || "Sin sector";
     if (provider && row.PROVEEDOR !== provider) return;
     if (sectorFilter && sector !== sectorFilter) return;
-    const causeDate = row["FECHA RECIBO"] || row["FECHA ARRIBO"];
+    const causeDate = dateMode === "arribo" ? row["FECHA ARRIBO"] : row["FECHA RECIBO"];
     if (!dateInRange(causeDate, from, to)) return;
     const doc = String(row["N DOCUMENTO"] || "").trim();
     const docKey = doc || `${row["CODIGO CITA"] || ""}|${row.SKU || ""}|${row.PROVEEDOR || ""}|${row["FECHA RECIBO"] || ""}`;
@@ -2281,7 +2284,8 @@ function renderCauseBlock(rows, config) {
     .sort((a,b) => String(a[config.label]).localeCompare(String(b[config.label])) || String(a.Proveedor).localeCompare(String(b.Proveedor)))
     .slice(0, 60);
   renderTable(config.tableId, rowsOut, [config.label, "Proveedor", "Material", "SKU", "Tipo material", "N documento", "Fecha estimada", "Fecha recibo", "Fecha arribo"]);
-  document.getElementById(config.footerId).innerHTML = `<span>Mostrando ${rowsOut.length ? 1 : 0} a ${rowsOut.length} de ${details.length} registros</span><span>Filtrado por fecha recibo o arribo</span>`;
+  const dateLabel = dateMode === "arribo" ? "fecha de arribo" : "fecha de recibo";
+  document.getElementById(config.footerId).innerHTML = `<span>Mostrando ${rowsOut.length ? 1 : 0} a ${rowsOut.length} de ${details.length} registros</span><span>Filtrado por ${dateLabel}</span>`;
 }
 
 function renderCauseStats(config, stats) {
