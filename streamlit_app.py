@@ -6,7 +6,7 @@ import streamlit.components.v1 as components
 
 from app import HTML, analyze, make_json_safe
 
-APP_DATA_VERSION = "plan-recibo-parser-2026-06-02-v2"
+APP_DATA_VERSION = "plan-recibo-reset-2026-06-02"
 
 
 st.set_page_config(

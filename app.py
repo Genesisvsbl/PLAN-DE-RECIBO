@@ -12,7 +12,6 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-import unicodedata
 
 import pandas as pd
 import re
@@ -39,7 +38,6 @@ MONTHS_ES = {
 
 SOURCE_HEADERS = [
     "CODIGO CITA",
-    "TIPO DE CITA",
     "CATEGORIA",
     "STATUS",
     "SEMANA",
@@ -188,39 +186,12 @@ def make_json_safe(value: Any) -> Any:
     return value
 
 
-def normalize_header(value: Any) -> str:
-    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
-    text = re.sub(r"\s+", " ", text).strip().upper()
-    text = text.replace("°", "").replace("º", "")
-    return text
-
-
 def read_plan(file_obj: io.BytesIO | str | Path) -> pd.DataFrame:
     raw = pd.read_excel(file_obj, sheet_name="PLAN DE RECIBO", header=1, engine="openpyxl")
-    normalized_cols: dict[str, Any] = {}
-    for col in raw.columns:
-        normalized_cols.setdefault(normalize_header(col), col)
-    cantidad_cols = [col for col in raw.columns if normalize_header(col) == "CANTIDAD"]
-    aliases = {
-        "N DOCUMENTO": ["N DOCUMENTO"],
-        "TIPO ENTREGA": ["TIPO ENTREGA"],
-        "REMESA TRANSPORTE": ["REMESA TRANSPORTE"],
-        "FECHA ARRIBO": ["FECHA ARRIBO"],
-        "HORA ARRIBO": ["HORA ARRIBO"],
-        "FECHA RECIBO": ["FECHA RECIBO"],
-        "HORA RECIBO": ["HORA RECIBO"],
-    }
-    df = pd.DataFrame(index=raw.index)
-    for header in SOURCE_HEADERS:
-        if header == "CANTIDAD PROGRAMADA":
-            df[header] = raw[cantidad_cols[0]] if cantidad_cols else ""
-            continue
-        if header == "CANTIDAD RECIBIDA":
-            df[header] = raw[cantidad_cols[1]] if len(cantidad_cols) > 1 else ""
-            continue
-        candidates = aliases.get(header, [header])
-        source_col = next((normalized_cols.get(normalize_header(candidate)) for candidate in candidates if normalized_cols.get(normalize_header(candidate)) is not None), None)
-        df[header] = raw[source_col] if source_col is not None else ""
+    if len(raw.columns) > 1 and "TIPO" in str(raw.columns[1]).upper() and "CITA" in str(raw.columns[1]).upper():
+        raw = raw.drop(columns=[raw.columns[1]])
+    df = raw.iloc[:, : len(SOURCE_HEADERS)].copy()
+    df.columns = SOURCE_HEADERS
     reprogram_cols = [col for col in raw.columns if "REPROGRAM" in str(col).upper()]
     df["FECHA REPROGRAMADA"] = raw[reprogram_cols[0]] if reprogram_cols else ""
     for col in df.columns:
@@ -396,9 +367,6 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
     )
     out["CANTIDAD PROGRAMADA"] = pd.to_numeric(out["CANTIDAD PROGRAMADA"], errors="coerce").fillna(0)
     out["CANTIDAD RECIBIDA"] = pd.to_numeric(out["CANTIDAD RECIBIDA"], errors="coerce").fillna(0)
-    out["TIPO DE CITA"] = out["TIPO DE CITA"].astype(str).str.strip().str.upper().replace({"": "PROGRAMADO", "NAN": "PROGRAMADO"})
-    out.loc[out["TIPO DE CITA"].isin(["ADICIONAL", "EXTRA"]), "TIPO DE CITA"] = "ADICIONAL"
-    out.loc[~out["TIPO DE CITA"].isin(["PROGRAMADO", "ADICIONAL"]), "TIPO DE CITA"] = "PROGRAMADO"
     out["ES GRANEL"] = out["TIPO"].astype(str).str.strip().str.upper().eq("GR")
     out["DIF CANTIDAD"] = out["CANTIDAD RECIBIDA"] - out["CANTIDAD PROGRAMADA"]
     out.loc[out["ES GRANEL"], "DIF CANTIDAD"] = 0
@@ -502,9 +470,6 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
     today_total = int(df.loc[today_mask, "CITA KPI"].replace("", pd.NA).nunique())
     today_with_code = today_total
     today_code_rate = round(100 * today_with_code / max(today_total, 1), 1)
-    additional_total = int(df.loc[df["TIPO DE CITA"].eq("ADICIONAL"), "CITA KPI"].replace("", pd.NA).nunique())
-    scheduled_total = int(df.loc[df["TIPO DE CITA"].eq("PROGRAMADO"), "CITA KPI"].replace("", pd.NA).nunique())
-    today_additional = int(df.loc[today_mask & df["TIPO DE CITA"].eq("ADICIONAL"), "CITA KPI"].replace("", pd.NA).nunique())
 
     month = (
         df.groupby("MES ENTREGA", dropna=False)
@@ -631,9 +596,6 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
             "todayTrafficTotal": today_total,
             "todayTrafficWithCode": today_with_code,
             "todayTrafficRate": today_code_rate,
-            "scheduledTotal": scheduled_total,
-            "additionalTotal": additional_total,
-            "todayAdditional": today_additional,
             "missingDocPlate": missing_doc + missing_plate,
             "docDueTotal": due_doc_total,
             "docCompleteTotal": complete_doc_total,
@@ -818,7 +780,7 @@ HTML = r"""<!doctype html>
     .cause-chart-scroll svg { height:auto; min-height:220px; }
     .provider-cause-card .compact { max-height:210px; margin-top:0; }
     .provider-cause-card table { min-width:0; table-layout:fixed; }
-    .provider-cause-card th, .provider-cause-card td { padding:3px 3px; font-size:6.4px; white-space:normal; overflow-wrap:anywhere; line-height:1.02; }
+    .provider-cause-card th, .provider-cause-card td { padding:4px 4px; font-size:7.4px; white-space:normal; overflow-wrap:anywhere; line-height:1.08; }
     .provider-cause-card .actions { margin:0 0 8px; align-items:flex-start; display:block; }
     .provider-cause-card .mini-filters { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px; align-items:end; }
     .provider-cause-card .mini-filters label { min-width:0; font-size:9px; }
@@ -1124,16 +1086,6 @@ HTML = r"""<!doctype html>
     tbody tr.type-mp td:first-child { border-left:4px solid #16a34a; }
     tbody tr.type-gr td:first-child { border-left:4px solid #0a5df0; }
     tbody tr.type-bts td:first-child { border-left:4px solid #f59e0b; }
-    tbody tr.cita-adicional td,
-    tbody tr.cita-adicional:nth-child(even) td,
-    tbody tr.cita-adicional:hover td {
-      background:#fff7ed !important;
-      border-bottom-color:#fed7aa !important;
-      color:#7c2d12 !important;
-    }
-    tbody tr.cita-adicional td:first-child {
-      border-left:4px solid #f59e0b !important;
-    }
     .status-chip, .pill {
       border-radius:999px;
       padding:4px 8px;
@@ -1273,8 +1225,8 @@ HTML = r"""<!doctype html>
     }
     .nav-tabs button::after { left:19px; width:7px; height:7px; border-color:#0a5df0; }
     .kpis {
-      grid-template-columns:repeat(8, minmax(0, 1fr));
-      gap:10px;
+      grid-template-columns:repeat(6, minmax(0, 1fr));
+      gap:12px;
       margin:12px 0 14px;
     }
     .kpi {
@@ -1283,14 +1235,8 @@ HTML = r"""<!doctype html>
       border:1px solid var(--premium-line);
       background:linear-gradient(180deg, #fff 0%, #f8fbff 100%);
       box-shadow:0 18px 38px rgba(4,19,38,.075);
-      padding:15px 10px 12px 62px;
+      padding:17px 12px 13px 72px;
       overflow:hidden;
-    }
-    .kpi.extra {
-      border-color:#fed7aa;
-    }
-    .kpi.extra::after {
-      background:#f59e0b;
     }
     .kpi::after {
       display:block;
@@ -1962,8 +1908,6 @@ function renderModuleMetrics(data) {
 
 function renderKpis(k) {
   const items = [
-    ["Programadas", k.scheduledTotal ?? Math.max((k.total || 0) - (k.additionalTotal || 0), 0), "", "calendar", "plan"],
-    ["Adicionales", k.additionalTotal || 0, "extra", "alert", "vh extra"],
     ["Total citas", k.total, "", "calendar", "vs dia anterior"],
     ["Recibidos", k.receivedVehicle, "teal", "doc", "vs dia anterior"],
     ["Atención", k.inAttention, "amber", "clock", "vs dia anterior"],
@@ -2126,17 +2070,13 @@ function renderFilteredKpis() {
   const dueRows = filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) <= today);
   const docComplete = dueRows.filter(row => String(row["N DOCUMENTO"] || "").trim() && (String(row.PLACA || "").trim() || row["ESTADO VEHICULO"] === "PENDIENTE")).length;
   const status = citaStatusSummary(filteredRows);
-  const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
-  const scheduledRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "PROGRAMADO").toUpperCase() !== "ADICIONAL");
   const k = {
     total: uniqueCitas(filteredRows).size,
-    scheduledTotal: uniqueCitas(scheduledRows).size,
     receivedVehicle: status["RECIBIDO"] || 0,
     inAttention: status["EN ATENCION"] || 0,
     pendingVehicle: status["PENDIENTE"] || 0,
     docRate: Math.round((docComplete / Math.max(dueRows.length, 1)) * 1000) / 10,
     todayTrafficTotal: uniqueCitas(filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) === today)).size,
-    additionalTotal: uniqueCitas(additionalRows).size,
   };
   renderKpis(k);
   document.getElementById("status").textContent = `${fmt.format(filteredRows.length)} registros filtrados`;
@@ -2767,9 +2707,8 @@ function renderStatusDetail(rows, activeDay="") {
       const type = tipoCita(row);
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
-      const esAdicional = String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL";
       return {
-        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}${esAdicional ? " cita-adicional" : ""}`,
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
         Tipo: type,
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
@@ -2807,9 +2746,8 @@ function renderStatusDetail(rows, activeDay="") {
       const type = tipoCita(row);
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
-      const esAdicional = String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL";
       return {
-        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}${esAdicional ? " cita-adicional" : ""}`,
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
         Tipo: type,
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
