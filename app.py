@@ -205,6 +205,8 @@ def read_plan(file_obj: io.BytesIO | str | Path) -> pd.DataFrame:
         if "REPROGRAM" in upper and col not in drop_cols:
             fecha_reprogramada = raw[col].copy()
             drop_cols.append(col)
+        if "OPERATIVA" in upper and col not in drop_cols:
+            drop_cols.append(col)
     positional = raw.drop(columns=drop_cols, errors="ignore")
     tipo_material_target = 6
     if len(positional.columns) > tipo_material_target and "TIPO MATERIAL" not in str(positional.columns[tipo_material_target]).upper():
