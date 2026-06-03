@@ -502,7 +502,7 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
     today_total = int(df.loc[today_mask, "CITA KPI"].replace("", pd.NA).nunique())
     today_with_code = today_total
     today_code_rate = round(100 * today_with_code / max(today_total, 1), 1)
-    scheduled_total = int(df.loc[df["TIPO DE CITA"].eq("PROGRAMADA"), "CITA KPI"].replace("", pd.NA).nunique())
+    scheduled_total = int(df.loc[df["TIPO DE CITA"].eq("PROGRAMADA") & ~df["ES REPROGRAMADA"], "CITA KPI"].replace("", pd.NA).nunique())
     additional_total = int(df.loc[df["TIPO DE CITA"].eq("ADICIONAL"), "CITA KPI"].replace("", pd.NA).nunique())
     reprogrammed_total = int(df.loc[df["ES REPROGRAMADA"], "CITA KPI"].replace("", pd.NA).nunique())
 
@@ -1511,6 +1511,15 @@ HTML = r"""<!doctype html>
     #statusDetailTable tbody tr.cita-adicional:not(.qty-alert) td:first-child {
       border-left:4px solid #db2777 !important;
     }
+    #statusDetailTable tbody tr.cita-reprogramada:not(.cita-adicional):not(.qty-alert) td,
+    #statusDetailTable tbody tr.cita-reprogramada:not(.cita-adicional):not(.qty-alert):hover td {
+      background:#ecfeff !important;
+      border-bottom-color:#a5f3fc !important;
+      color:#155e75 !important;
+    }
+    #statusDetailTable tbody tr.cita-reprogramada:not(.cita-adicional):not(.qty-alert) td:first-child {
+      border-left:4px solid #0891b2 !important;
+    }
     .doc-ok, .doc-bad { width:20px; height:20px; border-width:2px; }
     .provider-cause-card { min-height:620px; grid-column:span 6; }
     .provider-cause-card svg { height:auto; }
@@ -2164,8 +2173,11 @@ function renderFilteredKpis() {
   const docComplete = dueRows.filter(row => String(row["N DOCUMENTO"] || "").trim() && (String(row.PLACA || "").trim() || row["ESTADO VEHICULO"] === "PENDIENTE")).length;
   const status = citaStatusSummary(filteredRows);
   const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
-  const scheduledRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "PROGRAMADA").toUpperCase() !== "ADICIONAL");
   const reprogrammedRows = filteredRows.filter(row => row["ES REPROGRAMADA"] === true || String(row["ES REPROGRAMADA"] || "").toLowerCase() === "true");
+  const scheduledRows = filteredRows.filter(row =>
+    String(row["TIPO DE CITA"] || "PROGRAMADA").toUpperCase() !== "ADICIONAL"
+    && !(row["ES REPROGRAMADA"] === true || String(row["ES REPROGRAMADA"] || "").toLowerCase() === "true")
+  );
   const k = {
     total: uniqueCitas(filteredRows).size,
     scheduledTotal: uniqueCitas(scheduledRows).size,
