@@ -189,14 +189,17 @@ def make_json_safe(value: Any) -> Any:
 def read_plan(file_obj: io.BytesIO | str | Path) -> pd.DataFrame:
     raw = pd.read_excel(file_obj, sheet_name="PLAN DE RECIBO", header=1, engine="openpyxl")
     tipo_cita = pd.Series([""] * len(raw), index=raw.index)
-    if len(raw.columns) > 1 and "TIPO" in str(raw.columns[1]).upper() and "CITA" in str(raw.columns[1]).upper():
-        tipo_cita = raw[raw.columns[1]].copy()
-        raw = raw.drop(columns=[raw.columns[1]])
-    df = raw.iloc[:, : len(SOURCE_HEADERS)].copy()
+    reprogram_cols = [col for col in raw.columns if "REPROGRAM" in str(col).upper()]
+    tipo_cita_cols = [col for col in raw.columns if "TIPO" in str(col).upper() and "CITA" in str(col).upper()]
+    if tipo_cita_cols:
+        tipo_cita = raw[tipo_cita_cols[0]].copy()
+    fecha_reprogramada = raw[reprogram_cols[0]].copy() if reprogram_cols else pd.Series([""] * len(raw), index=raw.index)
+    extra_cols = [*tipo_cita_cols, *reprogram_cols]
+    positional = raw.drop(columns=extra_cols, errors="ignore")
+    df = positional.iloc[:, : len(SOURCE_HEADERS)].copy()
     df.columns = SOURCE_HEADERS
     df["TIPO DE CITA"] = tipo_cita
-    reprogram_cols = [col for col in raw.columns if "REPROGRAM" in str(col).upper()]
-    df["FECHA REPROGRAMADA"] = raw[reprogram_cols[0]] if reprogram_cols else ""
+    df["FECHA REPROGRAMADA"] = fecha_reprogramada
     for col in df.columns:
         df[col] = df[col].map(clean_value)
     df = df[df.apply(lambda row: any(value != "" for value in row), axis=1)].copy()
@@ -300,7 +303,7 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
         out[col] = pd.to_datetime(out[col], errors="coerce")
 
     def estado(row: pd.Series) -> str:
-        entrega = as_date(row["FECHA ESTIMADA ENTREGA"])
+        entrega = as_date(row.get("FECHA CONTROL"))
         recibo = as_date(row["FECHA RECIBO"])
         modo = str(row.get("MODO", "")).upper()
         if modo == "CERRADO" or row.get("TIQUETE"):
@@ -334,11 +337,13 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
     out["MES ENTREGA"] = out["FECHA ESTIMADA ENTREGA"].dt.strftime("%Y-%m").fillna("Sin fecha")
     out["DIA ENTREGA"] = out["FECHA ESTIMADA ENTREGA"].dt.strftime("%Y-%m-%d").fillna("")
     out["FECHA CONTROL"] = out["FECHA REPROGRAMADA"].fillna(out["FECHA ESTIMADA ENTREGA"])
+    out["ES REPROGRAMADA"] = out["FECHA REPROGRAMADA"].notna()
+    out["DIA CONTROL"] = out["FECHA CONTROL"].dt.strftime("%Y-%m-%d").fillna("")
     out["ANO CONTROL"] = out["FECHA CONTROL"].dt.year.fillna("").astype(str).str.replace(".0", "", regex=False)
     out["MES CONTROL"] = out["FECHA CONTROL"].apply(
         lambda value: f"{value.month:02d} - {MONTHS_ES.get(value.month, '')}" if pd.notna(value) else ""
     )
-    out["SEMANA CONTROL"] = out["FECHA ESTIMADA ENTREGA"].apply(
+    out["SEMANA CONTROL"] = out["FECHA CONTROL"].apply(
         lambda value: f"SEM {value.isocalendar().week}" if pd.notna(value) else ""
     )
     out["SEMANA MATERIAL"] = out["FECHA CONTROL"].apply(
@@ -479,6 +484,7 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
     today_code_rate = round(100 * today_with_code / max(today_total, 1), 1)
     scheduled_total = int(df.loc[df["TIPO DE CITA"].eq("PROGRAMADA"), "CITA KPI"].replace("", pd.NA).nunique())
     additional_total = int(df.loc[df["TIPO DE CITA"].eq("ADICIONAL"), "CITA KPI"].replace("", pd.NA).nunique())
+    reprogrammed_total = int(df.loc[df["ES REPROGRAMADA"], "CITA KPI"].replace("", pd.NA).nunique())
 
     month = (
         df.groupby("MES ENTREGA", dropna=False)
@@ -492,11 +498,13 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
     agenda_start = TODAY
     agenda_end = TODAY + timedelta(days=14)
     agenda_mask = (
-        df["FECHA ESTIMADA ENTREGA"].dt.date.between(agenda_start, agenda_end)
+        df["FECHA CONTROL"].dt.date.between(agenda_start, agenda_end)
         & (df["ESTADO CONTROL"] != "CERRADO")
     )
     agenda_cols = [
-        "DIA ENTREGA",
+        "DIA CONTROL",
+        "FECHA ESTIMADA ENTREGA",
+        "FECHA REPROGRAMADA",
         "CODIGO CITA",
         "ESTADO CONTROL",
         "ESTADO VEHICULO",
@@ -516,6 +524,8 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
         "FECHA PROGRAMADA",
         "FECHA ESTIMADA ENTREGA",
         "FECHA REPROGRAMADA",
+        "DIA CONTROL",
+        "ES REPROGRAMADA",
         "DIA ENTREGA",
         "CODIGO CITA",
         "ESTADO CONTROL",
@@ -607,6 +617,7 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
             "todayTrafficRate": today_code_rate,
             "scheduledTotal": scheduled_total,
             "additionalTotal": additional_total,
+            "reprogrammedTotal": reprogrammed_total,
             "missingDocPlate": missing_doc + missing_plate,
             "docDueTotal": due_doc_total,
             "docCompleteTotal": complete_doc_total,
@@ -1246,7 +1257,7 @@ HTML = r"""<!doctype html>
     }
     .nav-tabs button::after { left:19px; width:7px; height:7px; border-color:#0a5df0; }
     .kpis {
-      grid-template-columns:repeat(7, minmax(0, 1fr));
+      grid-template-columns:repeat(8, minmax(0, 1fr));
       gap:10px;
       margin:12px 0 14px;
     }
@@ -1264,6 +1275,12 @@ HTML = r"""<!doctype html>
     }
     .kpi.extra::after {
       background:#db2777;
+    }
+    .kpi.reprog {
+      border-color:#99f6e4;
+    }
+    .kpi.reprog::after {
+      background:#0f766e;
     }
     .kpi::after {
       display:block;
@@ -1294,6 +1311,7 @@ HTML = r"""<!doctype html>
     .kpi.red .kpi-icon { background:#ffe7eb; color:#ef4444; }
     .kpi.purple .kpi-icon { background:#efe8ff; color:#7c3aed; }
     .kpi.extra .kpi-icon { background:#fff1f8; color:#db2777; }
+    .kpi.reprog .kpi-icon { background:#ecfeff; color:#0f766e; }
     .kpi svg { width:20px; height:20px; stroke-width:2.45; }
     .kpi span {
       display:block;
@@ -1635,25 +1653,39 @@ HTML = r"""<!doctype html>
     }
     #statusDetailTable th:nth-child(1), #statusDetailTable td:nth-child(1) { width:5%; }
     #statusDetailTable th:nth-child(2), #statusDetailTable td:nth-child(2) { width:4%; }
-    #statusDetailTable th:nth-child(3), #statusDetailTable td:nth-child(3) { width:5%; }
-    #statusDetailTable th:nth-child(4), #statusDetailTable td:nth-child(4),
-    #statusDetailTable th:nth-child(5), #statusDetailTable td:nth-child(5) { width:4%; }
-    #statusDetailTable th:nth-child(6), #statusDetailTable td:nth-child(6) { width:12%; }
-    #statusDetailTable th:nth-child(7), #statusDetailTable td:nth-child(7) { width:7%; }
-    #statusDetailTable th:nth-child(8), #statusDetailTable td:nth-child(8) { width:5%; }
-    #statusDetailTable th:nth-child(9), #statusDetailTable td:nth-child(9) { width:22%; }
-    #statusDetailTable th:nth-child(10), #statusDetailTable td:nth-child(10),
-    #statusDetailTable th:nth-child(11), #statusDetailTable td:nth-child(11) { width:6%; }
-    #statusDetailTable th:nth-child(12), #statusDetailTable td:nth-child(12) { width:4%; }
-    #statusDetailTable th:nth-child(13), #statusDetailTable td:nth-child(13) { width:5%; }
-    #statusDetailTable th:nth-child(14), #statusDetailTable td:nth-child(14) { width:4%; }
-    #statusDetailTable th:nth-child(15), #statusDetailTable td:nth-child(15) { width:7%; }
+    #statusDetailTable th:nth-child(3), #statusDetailTable td:nth-child(3) { width:4%; }
+    #statusDetailTable th:nth-child(4), #statusDetailTable td:nth-child(4) { width:5%; }
+    #statusDetailTable th:nth-child(5), #statusDetailTable td:nth-child(5),
+    #statusDetailTable th:nth-child(6), #statusDetailTable td:nth-child(6) { width:4%; }
+    #statusDetailTable th:nth-child(7), #statusDetailTable td:nth-child(7) { width:11%; }
+    #statusDetailTable th:nth-child(8), #statusDetailTable td:nth-child(8) { width:7%; }
+    #statusDetailTable th:nth-child(9), #statusDetailTable td:nth-child(9) { width:5%; }
+    #statusDetailTable th:nth-child(10), #statusDetailTable td:nth-child(10) { width:20%; }
+    #statusDetailTable th:nth-child(11), #statusDetailTable td:nth-child(11),
+    #statusDetailTable th:nth-child(12), #statusDetailTable td:nth-child(12) { width:6%; }
+    #statusDetailTable th:nth-child(13), #statusDetailTable td:nth-child(13) { width:4%; }
+    #statusDetailTable th:nth-child(14), #statusDetailTable td:nth-child(14) { width:5%; }
+    #statusDetailTable th:nth-child(15), #statusDetailTable td:nth-child(15) { width:4%; }
+    #statusDetailTable th:nth-child(16), #statusDetailTable td:nth-child(16) { width:6%; }
     #statusDetailTable .type-chip {
       display:inline-flex;
       align-items:center;
       justify-content:center;
       min-width:42px;
       height:22px;
+    }
+    .reprog-chip {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:52px;
+      height:20px;
+      border-radius:999px;
+      background:#ecfeff;
+      border:1px solid #67e8f9;
+      color:#0f766e;
+      font-weight:950;
+      font-size:8px;
     }
     @media (max-width: 1420px) {
       .kpis { grid-template-columns:repeat(4, minmax(0, 1fr)); }
@@ -1756,8 +1788,8 @@ HTML = r"""<!doctype html>
       <div><label>Buscar</label><input id="search" type="search" placeholder="SKU, proveedor, placa..." /></div>
       <div><label>Programada desde</label><input id="progFrom" type="date" /></div>
       <div><label>Programada hasta</label><input id="progTo" type="date" /></div>
-      <div><label>Estimada desde</label><input id="estFrom" type="date" /></div>
-      <div><label>Estimada hasta</label><input id="estTo" type="date" /></div>
+      <div><label>Fecha cita desde</label><input id="estFrom" type="date" /></div>
+      <div><label>Fecha cita hasta</label><input id="estTo" type="date" /></div>
       <div><label>Reprogramada desde</label><input id="repFrom" type="date" /></div>
       <div><label>Reprogramada hasta</label><input id="repTo" type="date" /></div>
       <div class="filter-actions"><button class="clear-filters" id="clearFilters" type="button">Limpiar filtros</button></div>
@@ -1945,9 +1977,11 @@ function renderModuleMetrics(data) {
 
 function renderKpis(k) {
   const additionalTotal = Number(k.additionalTotal || 0);
+  const reprogrammedTotal = Number(k.reprogrammedTotal || 0);
   const items = [
     ["Citas programadas", k.scheduledTotal ?? Math.max((k.total || 0) - (k.additionalTotal || 0), 0), "", "calendar", "plan"],
     ...(additionalTotal > 0 ? [["Citas adicionales", additionalTotal, "extra", "alert", "vh extra"]] : []),
+    ...(reprogrammedTotal > 0 ? [["Citas reprogramadas", reprogrammedTotal, "reprog", "clock", "fecha vigente"]] : []),
     ["Total citas", k.total, "", "calendar", "vs dia anterior"],
     ["Recibidos", k.receivedVehicle, "teal", "doc", "vs dia anterior"],
     ["Atención", k.inAttention, "amber", "clock", "vs dia anterior"],
@@ -2082,7 +2116,7 @@ function applyFilters() {
       if (value && String(row[col] || "") !== value) return false;
     }
     if (!dateInRange(row["FECHA PROGRAMADA"], progFrom, progTo)) return false;
-    if (!dateInRange(row["FECHA ESTIMADA ENTREGA"], estFrom, estTo)) return false;
+    if (!dateInRange(row["FECHA CONTROL"], estFrom, estTo)) return false;
     if (!dateInRange(row["FECHA REPROGRAMADA"], repFrom, repTo)) return false;
     if (!q) return true;
     return Object.values(row).some(value => String(value || "").toLowerCase().includes(q));
@@ -2111,10 +2145,12 @@ function renderFilteredKpis() {
   const status = citaStatusSummary(filteredRows);
   const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
   const scheduledRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "PROGRAMADA").toUpperCase() !== "ADICIONAL");
+  const reprogrammedRows = filteredRows.filter(row => row["ES REPROGRAMADA"] === true || String(row["ES REPROGRAMADA"] || "").toLowerCase() === "true");
   const k = {
     total: uniqueCitas(filteredRows).size,
     scheduledTotal: uniqueCitas(scheduledRows).size,
     additionalTotal: uniqueCitas(additionalRows).size,
+    reprogrammedTotal: uniqueCitas(reprogrammedRows).size,
     receivedVehicle: status["RECIBIDO"] || 0,
     inAttention: status["EN ATENCION"] || 0,
     pendingVehicle: status["PENDIENTE"] || 0,
@@ -2707,7 +2743,7 @@ function getActiveDay(rows) {
   const progTo = document.getElementById("progTo")?.value || "";
   if (estFrom && estFrom === estTo) return estFrom;
   if (progFrom && progFrom === progTo) return progFrom;
-  const dates = new Set(rows.map(row => String(row["FECHA ESTIMADA ENTREGA"] || row["FECHA CONTROL"] || row["FECHA PROGRAMADA"] || "").slice(0, 10)).filter(Boolean));
+  const dates = new Set(rows.map(row => String(row["FECHA CONTROL"] || row["FECHA ESTIMADA ENTREGA"] || row["FECHA PROGRAMADA"] || "").slice(0, 10)).filter(Boolean));
   return dates.size === 1 ? [...dates][0] : "";
 }
 
@@ -2759,9 +2795,11 @@ function renderStatusDetail(rows, activeDay="") {
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
       const esAdicional = additionalSortValue(row) === 1;
+      const esReprogramada = row["ES REPROGRAMADA"] === true || String(row["ES REPROGRAMADA"] || "").toLowerCase() === "true";
       return {
-        _rowClass: `${statusClass(estado)} ${typeClass(type)}${esAdicional ? " cita-adicional" : ""}${tieneDiferencia ? " qty-alert" : ""}`,
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${esAdicional ? " cita-adicional" : ""}${esReprogramada ? " cita-reprogramada" : ""}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
+        Reprog: esReprogramada,
         Tipo: type,
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
         "Hora prog.": shortTime(row["HORA ARRIBO"]),
@@ -2781,7 +2819,7 @@ function renderStatusDetail(rows, activeDay="") {
   const title = activeDay ? `Detalle de citas del día - ${formatDateEs(activeDay)}` : "Detalle de citas filtradas";
   document.getElementById("statusDetailTitle").textContent = title;
   document.getElementById("statusDetailCount").textContent = `Total registros: ${fmt.format(detail.length)}`;
-  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
+  renderTable("statusDetailTable", detail, ["Estado", "Reprog", "Tipo", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
 }
 
 function renderStatusDetail(rows, activeDay="") {
@@ -2798,9 +2836,11 @@ function renderStatusDetail(rows, activeDay="") {
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
       const esAdicional = additionalSortValue(row) === 1;
+      const esReprogramada = row["ES REPROGRAMADA"] === true || String(row["ES REPROGRAMADA"] || "").toLowerCase() === "true";
       return {
-        _rowClass: `${statusClass(estado)} ${typeClass(type)}${esAdicional ? " cita-adicional" : ""}${tieneDiferencia ? " qty-alert" : ""}`,
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${esAdicional ? " cita-adicional" : ""}${esReprogramada ? " cita-reprogramada" : ""}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
+        Reprog: esReprogramada,
         Tipo: type,
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
         "Hora prog.": shortTime(row["HORA ARRIBO"]),
@@ -2820,7 +2860,7 @@ function renderStatusDetail(rows, activeDay="") {
   const title = activeDay ? `Detalle de citas del dia - ${formatDateEs(activeDay)}` : "Detalle de citas filtradas";
   document.getElementById("statusDetailTitle").textContent = title;
   document.getElementById("statusDetailCount").textContent = `Total registros: ${fmt.format(detail.length)}`;
-  renderTable("statusDetailTable", detail, ["Estado", "Tipo", "Cod cita", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
+  renderTable("statusDetailTable", detail, ["Estado", "Reprog", "Tipo", "Cod cita", "Hora prog.", "Hora est.", "Proveedor", "Material", "SKU", "Descripcion", "Cant. prog.", "Cant. rec.", "Unidad", "Placa", "Doc. OK", "Obs"]);
 }
 
 function tipoCita(row) {
@@ -3342,6 +3382,8 @@ function renderTable(id, rows, cols) {
 
 function cellValue(col, value) {
   if (col === "Estado") return `<span class="status-chip ${escapeHtml(String(value).replaceAll(" ", "_"))}">${escapeHtml(value)}</span>`;
+  if (col === "Reprog") return value ? `<span class="reprog-chip">REPROG</span>` : "";
+  if (col === "ES REPROGRAMADA") return value ? "SI" : "NO";
   if (col === "TIPO" || col === "Tipo") return `<span class="type-chip ${escapeHtml(value)}">${escapeHtml(value)}</span>`;
   if (col === "Doc. OK") {
     const ok = String(value || "") === "OK";
@@ -3357,6 +3399,8 @@ function cellValue(col, value) {
 
 function cellValue(col, value) {
   if (col === "Estado") return `<span class="status-chip ${escapeHtml(String(value).replaceAll(" ", "_"))}">${escapeHtml(value)}</span>`;
+  if (col === "Reprog") return value ? `<span class="reprog-chip">REPROG</span>` : "";
+  if (col === "ES REPROGRAMADA") return value ? "SI" : "NO";
   if (col === "TIPO" || col === "Tipo") return `<span class="type-chip ${escapeHtml(value)}">${escapeHtml(value)}</span>`;
   if (col === "Doc. OK") {
     const ok = String(value || "") === "OK";
