@@ -2145,7 +2145,7 @@ function applyFilters() {
       if (value && String(row[col] || "") !== value) return false;
     }
     if (!dateInRange(row["FECHA PROGRAMADA"], progFrom, progTo)) return false;
-    if (!dateInRange(row["FECHA CONTROL"], estFrom, estTo)) return false;
+    if (!dateMatchesCitaFilter(row, estFrom, estTo)) return false;
     if (!dateInRange(row["FECHA REPROGRAMADA"], repFrom, repTo)) return false;
     if (!q) return true;
     return Object.values(row).some(value => String(value || "").toLowerCase().includes(q));
@@ -2167,16 +2167,26 @@ function dateInRange(value, from, to) {
   return true;
 }
 
+function isReprogrammed(row) {
+  return row["ES REPROGRAMADA"] === true || String(row["ES REPROGRAMADA"] || "").toLowerCase() === "true";
+}
+
+function dateMatchesCitaFilter(row, from, to) {
+  if (!from && !to) return true;
+  if (dateInRange(row["FECHA CONTROL"], from, to)) return true;
+  return isReprogrammed(row) && dateInRange(row["FECHA ESTIMADA ENTREGA"], from, to);
+}
+
 function renderFilteredKpis() {
   const today = new Date().toISOString().slice(0, 10);
   const dueRows = filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) <= today);
   const docComplete = dueRows.filter(row => String(row["N DOCUMENTO"] || "").trim() && (String(row.PLACA || "").trim() || row["ESTADO VEHICULO"] === "PENDIENTE")).length;
   const status = citaStatusSummary(filteredRows);
   const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
-  const reprogrammedRows = filteredRows.filter(row => row["ES REPROGRAMADA"] === true || String(row["ES REPROGRAMADA"] || "").toLowerCase() === "true");
+  const reprogrammedRows = filteredRows.filter(row => isReprogrammed(row));
   const scheduledRows = filteredRows.filter(row =>
     String(row["TIPO DE CITA"] || "PROGRAMADA").toUpperCase() !== "ADICIONAL"
-    && !(row["ES REPROGRAMADA"] === true || String(row["ES REPROGRAMADA"] || "").toLowerCase() === "true")
+    && !isReprogrammed(row)
   );
   const k = {
     total: uniqueCitas(filteredRows).size,
