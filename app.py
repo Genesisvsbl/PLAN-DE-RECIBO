@@ -853,6 +853,7 @@ HTML = r"""<!doctype html>
     .focus-stat.red strong { color:#dc2626; }
     .focus-stat.green strong { color:#15803d; }
     .focus-stat.amber strong { color:#d97706; }
+    .focus-stat.cyan strong { color:#0891b2; }
     .focus-section .table-wrap { max-height:none; overflow:visible; }
     .focus-section table { min-width:0; table-layout:fixed; }
     .focus-section th, .focus-section td { padding:6px 7px; font-size:9.2px; line-height:1.18; white-space:normal; overflow-wrap:anywhere; vertical-align:middle; }
@@ -1633,18 +1634,28 @@ HTML = r"""<!doctype html>
     #weeklyFocusDetailTable th:nth-child(7), #weeklyFocusDetailTable td:nth-child(7) { width:auto; }
     #weeklyFocusDetailTable th:nth-child(8), #weeklyFocusDetailTable td:nth-child(8) { width:92px; }
     #weeklyFocusDetailTable th:nth-child(9), #weeklyFocusDetailTable td:nth-child(9) { width:66px; }
-    #weeklyFocusDetailTable th:nth-child(10), #weeklyFocusDetailTable td:nth-child(10) { width:92px; text-align:right; }
-    #weeklyFocusDetailTable th:nth-child(11), #weeklyFocusDetailTable td:nth-child(11) { width:88px; text-align:right; }
-    #weeklyFocusDetailTable th:nth-child(12), #weeklyFocusDetailTable td:nth-child(12) { width:78px; text-align:right; }
-    #weeklyFocusDetailTable th:nth-child(13), #weeklyFocusDetailTable td:nth-child(13) { width:84px; text-align:right; }
-    #weeklyFocusDetailTable th:nth-child(10),
+    #weeklyFocusDetailTable th:nth-child(10), #weeklyFocusDetailTable td:nth-child(10) { width:70px; }
+    #weeklyFocusDetailTable th:nth-child(11), #weeklyFocusDetailTable td:nth-child(11),
+    #weeklyFocusDetailTable th:nth-child(12), #weeklyFocusDetailTable td:nth-child(12) { width:82px; text-align:right; }
+    #weeklyFocusDetailTable th:nth-child(13), #weeklyFocusDetailTable td:nth-child(13) { width:76px; text-align:right; }
+    #weeklyFocusDetailTable th:nth-child(14), #weeklyFocusDetailTable td:nth-child(14) { width:78px; text-align:right; }
+    #weeklyFocusDetailTable th:nth-child(15), #weeklyFocusDetailTable td:nth-child(15) { width:68px; text-align:center; }
     #weeklyFocusDetailTable th:nth-child(11),
     #weeklyFocusDetailTable th:nth-child(12),
-    #weeklyFocusDetailTable th:nth-child(13) {
+    #weeklyFocusDetailTable th:nth-child(13),
+    #weeklyFocusDetailTable th:nth-child(14) {
       white-space:normal;
       word-break:normal;
       overflow-wrap:normal;
       line-height:1.05;
+    }
+    #weeklyFocusDetailTable tbody tr.date-alert td {
+      background:#fff7ed !important;
+      color:#9a3412 !important;
+      border-bottom-color:#fed7aa !important;
+    }
+    #weeklyFocusDetailTable tbody tr.date-alert td:first-child {
+      border-left:4px solid #f97316 !important;
     }
     .focus-chart-card .bar-label { font-size:10px; fill:#082145; font-weight:850; }
     .focus-chart-card .bar-value { font-size:9.5px; fill:#061a38; font-weight:950; }
@@ -3028,27 +3039,55 @@ function renderWeeklyFocus(rows) {
   }));
   renderFocusProviderChart("weeklyFocusChart", focusRows, "", "", "", "", "");
   renderTable("weeklyFocusTable", currentFocusRows, ["Semana", "Material", "Citas", "Cantidad programada", "Cantidad recibida", "Diferencia", "Cumplimiento %"]);
-  renderFocusStats(currentFocusRows);
+  renderFocusStats(currentFocusRows, focusRows);
   renderFocusDetailTable(focusRows, "", "", "", "", "");
   renderFocusAgenda(focusRows, "", "", "", "", "");
 }
 
-function renderFocusStats(rows) {
+function renderFocusStats(rows, detailRows=[]) {
   const totalProgramada = rows.reduce((sum, row) => sum + Number(row["Cantidad programada"] || 0), 0);
   const totalRecibida = rows.reduce((sum, row) => sum + Number(row["Cantidad recibida"] || 0), 0);
   const diferencia = rows.some(row => row.Diferencia === "N/A") ? "N/A" : totalRecibida - totalProgramada;
   const pendientes = rows.reduce((sum, row) => sum + Math.max(Number(row["Cantidad programada"] || 0) - Number(row["Cantidad recibida"] || 0), 0), 0);
   const cumplimiento = diferencia === "N/A" ? "N/A" : compliancePct(totalProgramada, totalRecibida);
+  const timely = focusDateCompliance(detailRows);
   const stats = [
     ["Programadas", totalProgramada, "green", "calendar"],
     ["Recibidas", totalRecibida, "teal", "truck"],
     ["Pendientes", pendientes, "amber", "clock"],
     ["Diferencia", diferencia, Number(diferencia) < 0 ? "red" : "", "x"],
     ["Cumplimiento", cumplimiento, "green", "percent"],
+    ["Tarde fecha", timely.late, timely.late ? "red" : "cyan", "clock"],
+    ["Cumpl fecha", `${timely.rate}%`, "cyan", "percent"],
   ];
   document.getElementById("focusStats").innerHTML = stats.map(([label, value, cls, icon]) =>
     `<div class="focus-stat ${cls}"><i>${iconSvg(icon)}</i><span>${label}</span><strong>${typeof value === "number" ? money.format(value) : value}</strong></div>`
   ).join("");
+}
+
+function focusDateCompliance(rows) {
+  const byCita = new Map();
+  rows.forEach(row => {
+    const key = citaBase(row);
+    if (!key) return;
+    const due = String(row["FECHA ESTIMADA ENTREGA"] || "").slice(0, 10);
+    const actual = latestDateText(row["FECHA RECIBO"], row["FECHA CONTROL"], row["FECHA REPROGRAMADA"]);
+    if (!due || !actual) return;
+    const lateDays = Math.max(0, Math.round((new Date(actual) - new Date(due)) / 86400000));
+    const current = byCita.get(key) || 0;
+    byCita.set(key, Math.max(current, lateDays));
+  });
+  const values = [...byCita.values()];
+  const late = values.filter(days => days > 0).length;
+  return { total: values.length, late, rate: Math.round(((values.length - late) / Math.max(values.length, 1)) * 1000) / 10 };
+}
+
+function latestDateText(...values) {
+  return values
+    .map(value => String(value || "").slice(0, 10))
+    .filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value))
+    .sort()
+    .pop() || "";
 }
 
 function syncFocusMaterials(data) {
@@ -3107,11 +3146,17 @@ function renderFocusDetailTable(rows, selectedMaterial, selectedWeek, selectedSk
     if (selectedSku && String(row.SKU) !== selectedSku) return;
     const programada = Number(row["CANTIDAD PROGRAMADA"] || 0);
     const recibida = Number(row["CANTIDAD RECIBIDA"] || 0);
+    const dueDate = String(row["FECHA ESTIMADA ENTREGA"] || "").slice(0, 10);
+    const actualDate = latestDateText(row["FECHA RECIBO"], row["FECHA CONTROL"], row["FECHA REPROGRAMADA"]);
+    const lateDays = dueDate && actualDate ? Math.max(0, Math.round((new Date(actualDate) - new Date(dueDate)) / 86400000)) : 0;
+    const qtyAlert = !(row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR") && Math.abs(recibida - programada) > 0.001;
+    const dateAlert = lateDays > 0;
     detail.push({
-      _rowClass: !(row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR") && Math.abs(recibida - programada) > 0.001 ? "qty-alert" : "",
+      _rowClass: `${qtyAlert ? "qty-alert" : ""}${dateAlert ? " date-alert" : ""}`.trim(),
       Semana: week,
       Grupo: group,
       "Fecha estimada entrega": row["FECHA ESTIMADA ENTREGA"],
+      "Fecha reprogramada": row["FECHA REPROGRAMADA"],
       "Fecha recibo": row["FECHA RECIBO"],
       SKU: row.SKU,
       Material: row.MATERIAL,
@@ -3121,11 +3166,13 @@ function renderFocusDetailTable(rows, selectedMaterial, selectedWeek, selectedSk
       "Cant programada": programada,
       "Cant recibida": recibida,
       Diferencia: row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR" ? "N/A" : recibida - programada,
-      "Cumplimiento %": row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR" ? "N/A" : compliancePct(programada, recibida)
+      "Cumplimiento %": row["ES GRANEL"] || row["CUMPLE CANTIDAD"] === "No aplica GR" ? "N/A" : compliancePct(programada, recibida),
+      "Dias atraso": lateDays,
+      "Cumple fecha": lateDays > 0 ? "NO" : "SI"
     });
   });
-  detail.sort((a,b) => String(a["Fecha recibo"] || "").localeCompare(String(b["Fecha recibo"] || "")) || String(a.Proveedor).localeCompare(String(b.Proveedor)));
-  renderTable("weeklyFocusDetailTable", detail.slice(0, 400), ["Semana", "Grupo", "Fecha estimada entrega", "Fecha recibo", "Proveedor", "SKU", "Material", "Tipo material", "Cod cita", "Cant programada", "Cant recibida", "Diferencia", "Cumplimiento %"]);
+  detail.sort((a,b) => Number(b["Dias atraso"] || 0) - Number(a["Dias atraso"] || 0) || String(a["Fecha recibo"] || "").localeCompare(String(b["Fecha recibo"] || "")) || String(a.Proveedor).localeCompare(String(b.Proveedor)));
+  renderTable("weeklyFocusDetailTable", detail.slice(0, 400), ["Semana", "Grupo", "Fecha estimada entrega", "Fecha reprogramada", "Fecha recibo", "Proveedor", "SKU", "Material", "Tipo material", "Cod cita", "Cant programada", "Cant recibida", "Diferencia", "Cumplimiento %", "Dias atraso", "Cumple fecha"]);
 }
 
 function renderFocusAgenda(rows, selectedMaterial, selectedWeek, selectedSku, selectedYear, selectedMonth) {
