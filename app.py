@@ -206,6 +206,16 @@ def read_plan(file_obj: io.BytesIO | str | Path) -> pd.DataFrame:
             fecha_reprogramada = raw[col].copy()
             drop_cols.append(col)
     positional = raw.drop(columns=drop_cols, errors="ignore")
+    tipo_material_target = 6
+    if len(positional.columns) > tipo_material_target and "TIPO MATERIAL" not in str(positional.columns[tipo_material_target]).upper():
+        tipo_material_positions = [
+            idx for idx, col in enumerate(positional.columns) if "TIPO MATERIAL" in str(col).upper()
+        ]
+        if tipo_material_positions and tipo_material_positions[0] > tipo_material_target:
+            extra_cols = list(positional.columns[tipo_material_target:tipo_material_positions[0]])
+            if extra_cols and fecha_reprogramada.replace("", pd.NA).isna().all():
+                fecha_reprogramada = positional[extra_cols[0]].copy()
+            positional = positional.drop(columns=extra_cols, errors="ignore")
     df = positional.iloc[:, : len(SOURCE_HEADERS)].copy()
     df.columns = SOURCE_HEADERS
     df["TIPO DE CITA"] = tipo_cita
