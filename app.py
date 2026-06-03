@@ -1100,12 +1100,12 @@ HTML = r"""<!doctype html>
     tbody tr.cita-adicional td,
     tbody tr.cita-adicional:nth-child(even) td,
     tbody tr.cita-adicional:hover td {
-      background:#fff7ed !important;
-      border-bottom-color:#fed7aa !important;
-      color:#7c2d12 !important;
+      background:#eef2ff !important;
+      border-bottom-color:#c7d2fe !important;
+      color:#312e81 !important;
     }
     tbody tr.cita-adicional td:first-child {
-      border-left:4px solid #f59e0b !important;
+      border-left:4px solid #4f46e5 !important;
     }
     .status-chip, .pill {
       border-radius:999px;
@@ -1260,10 +1260,10 @@ HTML = r"""<!doctype html>
       overflow:hidden;
     }
     .kpi.extra {
-      border-color:#fed7aa;
+      border-color:#c7d2fe;
     }
     .kpi.extra::after {
-      background:#f59e0b;
+      background:#4f46e5;
     }
     .kpi::after {
       display:block;
@@ -1465,12 +1465,12 @@ HTML = r"""<!doctype html>
     }
     #statusDetailTable tbody tr.cita-adicional:not(.qty-alert) td,
     #statusDetailTable tbody tr.cita-adicional:not(.qty-alert):hover td {
-      background:#fff7ed !important;
-      border-bottom-color:#fed7aa !important;
-      color:#7c2d12 !important;
+      background:#eef2ff !important;
+      border-bottom-color:#c7d2fe !important;
+      color:#312e81 !important;
     }
     #statusDetailTable tbody tr.cita-adicional:not(.qty-alert) td:first-child {
-      border-left:4px solid #f59e0b !important;
+      border-left:4px solid #4f46e5 !important;
     }
     .doc-ok, .doc-bad { width:20px; height:20px; border-width:2px; }
     .provider-cause-card { min-height:620px; grid-column:span 6; }
@@ -2742,9 +2742,9 @@ function hourSortValue(label) {
 function renderStatusDetail(rows, activeDay="") {
   const detail = rows
     .slice()
-    .sort((a,b) => additionalSortValue(a) - additionalSortValue(b)
-      || statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
+    .sort((a,b) => statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
       || typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
+      || additionalSortValue(a) - additionalSortValue(b)
       || hourSortValue(hourLabel(a["HORA ARRIBO"] || a["HORA RECIBO"])) - hourSortValue(hourLabel(b["HORA ARRIBO"] || b["HORA RECIBO"]))
       || String(a.PROVEEDOR || "").localeCompare(String(b.PROVEEDOR || "")))
     .map(row => {
@@ -2783,9 +2783,9 @@ function renderStatusDetail(rows, activeDay="") {
 function renderStatusDetail(rows, activeDay="") {
   const detail = rows
     .slice()
-    .sort((a,b) => additionalSortValue(a) - additionalSortValue(b)
-      || statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
+    .sort((a,b) => statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
       || typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
+      || additionalSortValue(a) - additionalSortValue(b)
       || hourSortValue(hourLabel(a["HORA ARRIBO"] || a["HORA RECIBO"])) - hourSortValue(hourLabel(b["HORA ARRIBO"] || b["HORA RECIBO"]))
       || String(a.PROVEEDOR || "").localeCompare(String(b.PROVEEDOR || "")))
     .map(row => {
