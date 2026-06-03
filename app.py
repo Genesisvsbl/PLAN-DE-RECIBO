@@ -189,13 +189,23 @@ def make_json_safe(value: Any) -> Any:
 def read_plan(file_obj: io.BytesIO | str | Path) -> pd.DataFrame:
     raw = pd.read_excel(file_obj, sheet_name="PLAN DE RECIBO", header=1, engine="openpyxl")
     tipo_cita = pd.Series([""] * len(raw), index=raw.index)
-    reprogram_cols = [col for col in raw.columns if "REPROGRAM" in str(col).upper()]
-    tipo_cita_cols = [col for col in raw.columns if "TIPO" in str(col).upper() and "CITA" in str(col).upper()]
-    if tipo_cita_cols:
-        tipo_cita = raw[tipo_cita_cols[0]].copy()
-    fecha_reprogramada = raw[reprogram_cols[0]].copy() if reprogram_cols else pd.Series([""] * len(raw), index=raw.index)
-    extra_cols = [*tipo_cita_cols, *reprogram_cols]
-    positional = raw.drop(columns=extra_cols, errors="ignore")
+    fecha_reprogramada = pd.Series([""] * len(raw), index=raw.index)
+    drop_cols: list[Any] = []
+    if len(raw.columns) > 1 and "TIPO" in str(raw.columns[1]).upper() and "CITA" in str(raw.columns[1]).upper():
+        tipo_cita = raw.iloc[:, 1].copy()
+        drop_cols.append(raw.columns[1])
+    if len(raw.columns) > 7 and "REPROGRAM" in str(raw.columns[7]).upper():
+        fecha_reprogramada = raw.iloc[:, 7].copy()
+        drop_cols.append(raw.columns[7])
+    for col in raw.columns:
+        upper = str(col).upper()
+        if "TIPO" in upper and "CITA" in upper and col not in drop_cols:
+            tipo_cita = raw[col].copy()
+            drop_cols.append(col)
+        if "REPROGRAM" in upper and col not in drop_cols:
+            fecha_reprogramada = raw[col].copy()
+            drop_cols.append(col)
+    positional = raw.drop(columns=drop_cols, errors="ignore")
     df = positional.iloc[:, : len(SOURCE_HEADERS)].copy()
     df.columns = SOURCE_HEADERS
     df["TIPO DE CITA"] = tipo_cita
