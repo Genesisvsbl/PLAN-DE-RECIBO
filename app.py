@@ -1100,12 +1100,12 @@ HTML = r"""<!doctype html>
     tbody tr.cita-adicional td,
     tbody tr.cita-adicional:nth-child(even) td,
     tbody tr.cita-adicional:hover td {
-      background:#eef2ff !important;
-      border-bottom-color:#c7d2fe !important;
-      color:#312e81 !important;
+      background:#fff1f8 !important;
+      border-bottom-color:#f9a8d4 !important;
+      color:#831843 !important;
     }
     tbody tr.cita-adicional td:first-child {
-      border-left:4px solid #4f46e5 !important;
+      border-left:4px solid #db2777 !important;
     }
     .status-chip, .pill {
       border-radius:999px;
@@ -1260,10 +1260,10 @@ HTML = r"""<!doctype html>
       overflow:hidden;
     }
     .kpi.extra {
-      border-color:#c7d2fe;
+      border-color:#f9a8d4;
     }
     .kpi.extra::after {
-      background:#4f46e5;
+      background:#db2777;
     }
     .kpi::after {
       display:block;
@@ -1293,7 +1293,7 @@ HTML = r"""<!doctype html>
     .kpi.amber .kpi-icon { background:#fff0d8; color:#e28706; }
     .kpi.red .kpi-icon { background:#ffe7eb; color:#ef4444; }
     .kpi.purple .kpi-icon { background:#efe8ff; color:#7c3aed; }
-    .kpi.extra .kpi-icon { background:#eef2ff; color:#4f46e5; }
+    .kpi.extra .kpi-icon { background:#fff1f8; color:#db2777; }
     .kpi svg { width:20px; height:20px; stroke-width:2.45; }
     .kpi span {
       display:block;
@@ -1466,12 +1466,12 @@ HTML = r"""<!doctype html>
     }
     #statusDetailTable tbody tr.cita-adicional:not(.qty-alert) td,
     #statusDetailTable tbody tr.cita-adicional:not(.qty-alert):hover td {
-      background:#eef2ff !important;
-      border-bottom-color:#c7d2fe !important;
-      color:#312e81 !important;
+      background:#fff1f8 !important;
+      border-bottom-color:#f9a8d4 !important;
+      color:#831843 !important;
     }
     #statusDetailTable tbody tr.cita-adicional:not(.qty-alert) td:first-child {
-      border-left:4px solid #4f46e5 !important;
+      border-left:4px solid #db2777 !important;
     }
     .doc-ok, .doc-bad { width:20px; height:20px; border-width:2px; }
     .provider-cause-card { min-height:620px; grid-column:span 6; }
