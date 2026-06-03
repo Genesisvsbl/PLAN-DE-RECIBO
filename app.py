@@ -1729,6 +1729,82 @@ HTML = r"""<!doctype html>
       font-weight:950;
       font-size:8px;
     }
+    .capture-wrapper .indicadores-capture {
+      width:100%;
+      box-sizing:border-box;
+      background:#eef4fb;
+      color:#061a38;
+      font-family:Segoe UI, Arial, sans-serif;
+    }
+    .capture-wrapper .indicadores-capture-head {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      margin:0 0 14px;
+      padding:14px 18px;
+      border-radius:16px;
+      background:#061a38;
+      color:white;
+      box-shadow:none;
+    }
+    .capture-wrapper .indicadores-capture-head h1 {
+      margin:0 0 5px;
+      font-size:24px;
+      line-height:1.05;
+      letter-spacing:0;
+      color:white;
+    }
+    .capture-wrapper .indicadores-capture-head p {
+      margin:0;
+      color:#c7d7ec;
+      font-size:11px;
+      font-weight:800;
+    }
+    .capture-wrapper .indicadores-capture-head strong {
+      color:#dbeafe;
+      font-size:12px;
+      font-weight:900;
+    }
+    .capture-wrapper .kpis {
+      display:grid !important;
+      grid-template-columns:repeat(7, minmax(0, 1fr));
+      gap:12px;
+      margin:0 0 14px;
+    }
+    .capture-wrapper .export-summary-grid {
+      display:grid !important;
+      grid-template-columns:repeat(3, minmax(0, 1fr));
+      gap:12px;
+    }
+    .capture-wrapper .dashboard-chart {
+      grid-column:auto !important;
+      min-height:300px;
+      box-shadow:none !important;
+    }
+    .capture-wrapper .dashboard-chart svg {
+      height:250px;
+    }
+    .capture-wrapper .dashboard-detail {
+      display:block !important;
+      width:100% !important;
+      min-height:0;
+      box-shadow:none !important;
+    }
+    .capture-wrapper .dashboard-detail .actions {
+      margin-bottom:10px;
+    }
+    .capture-wrapper .dashboard-detail .table-wrap {
+      max-height:none !important;
+      overflow:visible !important;
+    }
+    .capture-wrapper .dashboard-detail table {
+      width:100%;
+      table-layout:fixed;
+    }
+    .capture-wrapper button,
+    .capture-wrapper .module-toolbar {
+      display:none !important;
+    }
     @media (max-width: 1420px) {
       .kpis { grid-template-columns:repeat(4, minmax(0, 1fr)); }
       .upload { position:static; width:100%; margin:10px 0 8px; }
@@ -3532,6 +3608,10 @@ function downloadCsv() {
 
 function exportCurrentModule() {
   if (!dataset || currentPage === "home") return;
+  if (currentPage === "dashboard") {
+    exportIndicadoresReport();
+    return;
+  }
   const previousStatus = document.getElementById("status").textContent;
   document.getElementById("status").textContent = "Generando captura...";
   const titles = {
@@ -3639,6 +3719,197 @@ function exportCurrentModule() {
     cleanup();
   };
   img.src = url;
+}
+
+async function exportIndicadoresReport() {
+  const previousStatus = document.getElementById("status").textContent;
+  const status = document.getElementById("status");
+  status.textContent = "Generando informe de indicadores...";
+  const timestamp = new Date();
+  const stamp = timestamp.toISOString().slice(0, 19).replaceAll(":", "").replace("T", "_").replaceAll("-", "");
+  try {
+    await ensureExportLibraries();
+    const summaryNode = buildIndicadoresSummaryCapture(timestamp);
+    const detailNode = buildIndicadoresDetailCapture(timestamp);
+    const summaryBlob = await captureNodeAsPng(summaryNode, 1920);
+    const detailBlob = await captureNodeAsPng(detailNode, 1920);
+    downloadBlob(summaryBlob, `indicadores_resumen_${stamp}.png`);
+    setTimeout(() => downloadBlob(detailBlob, `indicadores_detalle_${stamp}.png`), 250);
+    setTimeout(async () => {
+      const pdfBlob = await buildIndicadoresPdf(summaryBlob, detailBlob, timestamp);
+      downloadBlob(pdfBlob, `informe_indicadores_${stamp}.pdf`);
+      status.textContent = previousStatus || "Dashboard listo";
+    }, 500);
+  } catch (error) {
+    console.error(error);
+    status.textContent = "No pude generar el informe";
+    setTimeout(() => { status.textContent = previousStatus || "Dashboard listo"; }, 2500);
+  }
+}
+
+function buildIndicadoresSummaryCapture(timestamp) {
+  const capture = baseIndicadoresCapture("Indicadores - resumen operativo", timestamp);
+  capture.appendChild(prepCaptureNode(document.getElementById("kpis")));
+  const charts = document.createElement("section");
+  charts.className = "grid export-summary-grid";
+  document.querySelectorAll(".dashboard-chart[data-page='dashboard']").forEach(node => charts.appendChild(prepCaptureNode(node)));
+  capture.appendChild(charts);
+  return mountCaptureNode(capture, "1920px");
+}
+
+function buildIndicadoresDetailCapture(timestamp) {
+  const capture = baseIndicadoresCapture("Indicadores - detalle de citas", timestamp);
+  capture.appendChild(prepCaptureNode(document.querySelector(".dashboard-detail")));
+  return mountCaptureNode(capture, "1920px");
+}
+
+function baseIndicadoresCapture(title, timestamp) {
+  const capture = document.createElement("section");
+  capture.className = "module-capture indicadores-capture";
+  const meta = [
+    dataset?.fileName || "PLAN DE RECIBO",
+    `Generado: ${formatDateTime(timestamp)}`,
+    activeFilterSummary()
+  ].filter(Boolean).join(" | ");
+  const header = document.createElement("div");
+  header.className = "capture-head indicadores-capture-head";
+  header.innerHTML = `<div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(meta)}</p></div><strong>Plan de Recibo 2026.2</strong>`;
+  capture.appendChild(header);
+  return capture;
+}
+
+function mountCaptureNode(node, width="1920px") {
+  const wrapper = document.createElement("div");
+  wrapper.className = "capture-wrapper";
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-24000px";
+  wrapper.style.top = "0";
+  wrapper.style.width = width;
+  wrapper.style.background = "#eef4fb";
+  wrapper.style.padding = "18px";
+  wrapper.appendChild(node);
+  document.body.appendChild(wrapper);
+  return wrapper;
+}
+
+async function captureNodeAsPng(wrapper, width=1920) {
+  try {
+    const canvas = await html2canvas(wrapper, {
+      backgroundColor: "#eef4fb",
+      scale: 2,
+      width,
+      windowWidth: width,
+      useCORS: true,
+      logging: false
+    });
+    return await new Promise(resolve => canvas.toBlob(blob => resolve(blob), "image/png", 0.96));
+  } finally {
+    if (wrapper?.parentNode) wrapper.parentNode.removeChild(wrapper);
+  }
+}
+
+async function buildIndicadoresPdf(summaryBlob, detailBlob, timestamp) {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const margin = 8;
+  const title = "Plan de Recibo - Informe de indicadores";
+  const subtitle = `${dataset?.fileName || "PLAN DE RECIBO"} | Generado: ${formatDateTime(timestamp)}`;
+  const filters = activeFilterSummary();
+  const addHeader = (pageTitle) => {
+    pdf.setFillColor(6, 26, 56);
+    pdf.roundedRect(margin, margin, pageW - margin * 2, 14, 3, 3, "F");
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(12);
+    pdf.text(pageTitle, margin + 5, margin + 9);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7);
+    pdf.text(subtitle, pageW - margin - 5, margin + 6, { align: "right" });
+    if (filters) pdf.text(filters, pageW - margin - 5, margin + 11, { align: "right" });
+    pdf.setTextColor(0, 0, 0);
+  };
+  addHeader(title);
+  await addPngToPdf(pdf, summaryBlob, margin, 25, pageW - margin * 2, pageH - 33);
+  pdf.addPage("a4", "landscape");
+  addHeader("Detalle de citas");
+  await addPngToPdf(pdf, detailBlob, margin, 25, pageW - margin * 2, pageH - 33);
+  return pdf.output("blob");
+}
+
+async function addPngToPdf(pdf, blob, x, y, maxW, maxH) {
+  const dataUrl = await blobToDataUrl(blob);
+  const img = await loadImage(dataUrl);
+  const ratio = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+  const w = img.naturalWidth * ratio;
+  const h = img.naturalHeight * ratio;
+  pdf.addImage(dataUrl, "PNG", x + (maxW - w) / 2, y, w, h);
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function ensureExportLibraries() {
+  return Promise.all([
+    loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js", () => window.html2canvas),
+    loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", () => window.jspdf?.jsPDF),
+  ]);
+}
+
+function loadScriptOnce(src, ready) {
+  if (ready()) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = [...document.scripts].find(script => script.src === src);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once:true });
+      existing.addEventListener("error", reject, { once:true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = src;
+    script.onload = () => resolve();
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+function formatDateTime(date) {
+  return new Intl.DateTimeFormat("es-CO", {
+    year:"numeric", month:"2-digit", day:"2-digit",
+    hour:"2-digit", minute:"2-digit", second:"2-digit",
+    hour12:false
+  }).format(date);
+}
+
+function activeFilterSummary() {
+  const parts = [];
+  const addSelect = (label, selector) => {
+    const el = document.querySelector(selector);
+    if (el && el.value) parts.push(`${label}: ${el.options?.[el.selectedIndex]?.text || el.value}`);
+  };
+  addSelect("Ano", '[data-filter="ANO CONTROL"]');
+  addSelect("Mes", '[data-filter="MES CONTROL"]');
+  addSelect("Semana", '[data-filter="SEMANA CONTROL"]');
+  const from = document.getElementById("estFrom")?.value || "";
+  const to = document.getElementById("estTo")?.value || "";
+  if (from || to) parts.push(`Fecha cita: ${from || "..."} a ${to || "..."}`);
+  return parts.join(" | ");
 }
 
 function downloadBlob(blob, filename) {
