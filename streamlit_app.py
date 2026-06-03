@@ -6,7 +6,7 @@ import streamlit.components.v1 as components
 
 from app import HTML, analyze, make_json_safe
 
-APP_DATA_VERSION = "plan-recibo-tipo-cita-2026-06-02-v3"
+APP_DATA_VERSION = "plan-recibo-citas-adicionales-2026-06-02-v4"
 
 
 st.set_page_config(

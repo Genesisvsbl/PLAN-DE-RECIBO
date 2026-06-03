@@ -1463,6 +1463,15 @@ HTML = r"""<!doctype html>
     #statusDetailTable tbody tr.status-pendiente:not(.qty-alert) td:first-child {
       border-left:4px solid #1768f2;
     }
+    #statusDetailTable tbody tr.cita-adicional:not(.qty-alert) td,
+    #statusDetailTable tbody tr.cita-adicional:not(.qty-alert):hover td {
+      background:#fff7ed !important;
+      border-bottom-color:#fed7aa !important;
+      color:#7c2d12 !important;
+    }
+    #statusDetailTable tbody tr.cita-adicional:not(.qty-alert) td:first-child {
+      border-left:4px solid #f59e0b !important;
+    }
     .doc-ok, .doc-bad { width:20px; height:20px; border-width:2px; }
     .provider-cause-card { min-height:620px; grid-column:span 6; }
     .provider-cause-card svg { height:auto; }
@@ -1934,15 +1943,16 @@ function renderModuleMetrics(data) {
 }
 
 function renderKpis(k) {
+  const additionalTotal = Number(k.additionalTotal || 0);
   const items = [
-    ["Total citas", k.total, "", "calendar", "vs dia anterior"],
     ["Citas programadas", k.scheduledTotal ?? Math.max((k.total || 0) - (k.additionalTotal || 0), 0), "", "calendar", "plan"],
+    ...(additionalTotal > 0 ? [["Citas adicionales", additionalTotal, "extra", "alert", "vh extra"]] : []),
+    ["Total citas", k.total, "", "calendar", "vs dia anterior"],
     ["Recibidos", k.receivedVehicle, "teal", "doc", "vs dia anterior"],
     ["Atención", k.inAttention, "amber", "clock", "vs dia anterior"],
     ["Pendientes", k.pendingVehicle || 0, "", "folder", "vs dia anterior"],
     ["Cumplimiento doc.", `${k.docRate}%`, "purple", "doc", "vs dia anterior"],
   ];
-  if ((k.additionalTotal || 0) > 0) items.push(["Adicionales", k.additionalTotal, "extra", "alert", "vh extra"]);
   document.getElementById("kpis").innerHTML = items.map(([label, value, cls, icon, note]) =>
     `<div class="kpi ${cls}"><i class="kpi-icon">${iconSvg(icon)}</i><span>${label}</span><strong>${typeof value === "number" ? money.format(value) : value}</strong><small>${note}</small></div>`
   ).join("");
