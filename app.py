@@ -188,10 +188,13 @@ def make_json_safe(value: Any) -> Any:
 
 def read_plan(file_obj: io.BytesIO | str | Path) -> pd.DataFrame:
     raw = pd.read_excel(file_obj, sheet_name="PLAN DE RECIBO", header=1, engine="openpyxl")
+    tipo_cita = pd.Series([""] * len(raw), index=raw.index)
     if len(raw.columns) > 1 and "TIPO" in str(raw.columns[1]).upper() and "CITA" in str(raw.columns[1]).upper():
+        tipo_cita = raw[raw.columns[1]].copy()
         raw = raw.drop(columns=[raw.columns[1]])
     df = raw.iloc[:, : len(SOURCE_HEADERS)].copy()
     df.columns = SOURCE_HEADERS
+    df["TIPO DE CITA"] = tipo_cita
     reprogram_cols = [col for col in raw.columns if "REPROGRAM" in str(col).upper()]
     df["FECHA REPROGRAMADA"] = raw[reprogram_cols[0]] if reprogram_cols else ""
     for col in df.columns:
@@ -365,6 +368,10 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
     out["CUMPLIMIENTO FECHA"] = out["DIF DIAS RECIBO"].apply(
         lambda value: "Pendiente" if pd.isna(value) else ("A tiempo" if value <= 0 else "Tarde")
     )
+    out["TIPO DE CITA"] = out.get("TIPO DE CITA", "").astype(str).str.strip().str.upper().replace({"": "PROGRAMADA", "NAN": "PROGRAMADA"})
+    out.loc[out["TIPO DE CITA"].isin(["ADICIONAL", "ADICIONALES", "EXTRA", "B"]), "TIPO DE CITA"] = "ADICIONAL"
+    out.loc[~out["TIPO DE CITA"].isin(["PROGRAMADA", "PROGRAMADO", "ADICIONAL"]), "TIPO DE CITA"] = "PROGRAMADA"
+    out.loc[out["TIPO DE CITA"].eq("PROGRAMADO"), "TIPO DE CITA"] = "PROGRAMADA"
     out["CANTIDAD PROGRAMADA"] = pd.to_numeric(out["CANTIDAD PROGRAMADA"], errors="coerce").fillna(0)
     out["CANTIDAD RECIBIDA"] = pd.to_numeric(out["CANTIDAD RECIBIDA"], errors="coerce").fillna(0)
     out["ES GRANEL"] = out["TIPO"].astype(str).str.strip().str.upper().eq("GR")
@@ -470,6 +477,8 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
     today_total = int(df.loc[today_mask, "CITA KPI"].replace("", pd.NA).nunique())
     today_with_code = today_total
     today_code_rate = round(100 * today_with_code / max(today_total, 1), 1)
+    scheduled_total = int(df.loc[df["TIPO DE CITA"].eq("PROGRAMADA"), "CITA KPI"].replace("", pd.NA).nunique())
+    additional_total = int(df.loc[df["TIPO DE CITA"].eq("ADICIONAL"), "CITA KPI"].replace("", pd.NA).nunique())
 
     month = (
         df.groupby("MES ENTREGA", dropna=False)
@@ -596,6 +605,8 @@ def analyze(file_obj: io.BytesIO | str | Path, file_name: str) -> dict[str, Any]
             "todayTrafficTotal": today_total,
             "todayTrafficWithCode": today_with_code,
             "todayTrafficRate": today_code_rate,
+            "scheduledTotal": scheduled_total,
+            "additionalTotal": additional_total,
             "missingDocPlate": missing_doc + missing_plate,
             "docDueTotal": due_doc_total,
             "docCompleteTotal": complete_doc_total,
@@ -1086,6 +1097,16 @@ HTML = r"""<!doctype html>
     tbody tr.type-mp td:first-child { border-left:4px solid #16a34a; }
     tbody tr.type-gr td:first-child { border-left:4px solid #0a5df0; }
     tbody tr.type-bts td:first-child { border-left:4px solid #f59e0b; }
+    tbody tr.cita-adicional td,
+    tbody tr.cita-adicional:nth-child(even) td,
+    tbody tr.cita-adicional:hover td {
+      background:#fff7ed !important;
+      border-bottom-color:#fed7aa !important;
+      color:#7c2d12 !important;
+    }
+    tbody tr.cita-adicional td:first-child {
+      border-left:4px solid #f59e0b !important;
+    }
     .status-chip, .pill {
       border-radius:999px;
       padding:4px 8px;
@@ -1237,6 +1258,12 @@ HTML = r"""<!doctype html>
       box-shadow:0 18px 38px rgba(4,19,38,.075);
       padding:17px 12px 13px 72px;
       overflow:hidden;
+    }
+    .kpi.extra {
+      border-color:#fed7aa;
+    }
+    .kpi.extra::after {
+      background:#f59e0b;
     }
     .kpi::after {
       display:block;
@@ -1909,12 +1936,13 @@ function renderModuleMetrics(data) {
 function renderKpis(k) {
   const items = [
     ["Total citas", k.total, "", "calendar", "vs dia anterior"],
+    ["Citas programadas", k.scheduledTotal ?? Math.max((k.total || 0) - (k.additionalTotal || 0), 0), "", "calendar", "plan"],
     ["Recibidos", k.receivedVehicle, "teal", "doc", "vs dia anterior"],
     ["Atención", k.inAttention, "amber", "clock", "vs dia anterior"],
     ["Pendientes", k.pendingVehicle || 0, "", "folder", "vs dia anterior"],
     ["Cumplimiento doc.", `${k.docRate}%`, "purple", "doc", "vs dia anterior"],
-    ["Citas hoy", k.todayTrafficTotal, "green", "user", "vs dia anterior"],
   ];
+  if ((k.additionalTotal || 0) > 0) items.push(["Adicionales", k.additionalTotal, "extra", "alert", "vh extra"]);
   document.getElementById("kpis").innerHTML = items.map(([label, value, cls, icon, note]) =>
     `<div class="kpi ${cls}"><i class="kpi-icon">${iconSvg(icon)}</i><span>${label}</span><strong>${typeof value === "number" ? money.format(value) : value}</strong><small>${note}</small></div>`
   ).join("");
@@ -2070,8 +2098,12 @@ function renderFilteredKpis() {
   const dueRows = filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) <= today);
   const docComplete = dueRows.filter(row => String(row["N DOCUMENTO"] || "").trim() && (String(row.PLACA || "").trim() || row["ESTADO VEHICULO"] === "PENDIENTE")).length;
   const status = citaStatusSummary(filteredRows);
+  const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
+  const scheduledRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "PROGRAMADA").toUpperCase() !== "ADICIONAL");
   const k = {
     total: uniqueCitas(filteredRows).size,
+    scheduledTotal: uniqueCitas(scheduledRows).size,
+    additionalTotal: uniqueCitas(additionalRows).size,
     receivedVehicle: status["RECIBIDO"] || 0,
     inAttention: status["EN ATENCION"] || 0,
     pendingVehicle: status["PENDIENTE"] || 0,
@@ -2648,6 +2680,10 @@ function statusClass(text) {
   return "";
 }
 
+function additionalSortValue(row) {
+  return String(row["TIPO DE CITA"] || "").trim().toUpperCase() === "ADICIONAL" ? 1 : 0;
+}
+
 function getActiveDay(rows) {
   const estFrom = document.getElementById("estFrom")?.value || "";
   const estTo = document.getElementById("estTo")?.value || "";
@@ -2696,7 +2732,8 @@ function hourSortValue(label) {
 function renderStatusDetail(rows, activeDay="") {
   const detail = rows
     .slice()
-    .sort((a,b) => statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
+    .sort((a,b) => additionalSortValue(a) - additionalSortValue(b)
+      || statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
       || typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
       || hourSortValue(hourLabel(a["HORA ARRIBO"] || a["HORA RECIBO"])) - hourSortValue(hourLabel(b["HORA ARRIBO"] || b["HORA RECIBO"]))
       || String(a.PROVEEDOR || "").localeCompare(String(b.PROVEEDOR || "")))
@@ -2707,8 +2744,9 @@ function renderStatusDetail(rows, activeDay="") {
       const type = tipoCita(row);
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
+      const esAdicional = additionalSortValue(row) === 1;
       return {
-        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${esAdicional ? " cita-adicional" : ""}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
         Tipo: type,
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
@@ -2735,7 +2773,8 @@ function renderStatusDetail(rows, activeDay="") {
 function renderStatusDetail(rows, activeDay="") {
   const detail = rows
     .slice()
-    .sort((a,b) => statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
+    .sort((a,b) => additionalSortValue(a) - additionalSortValue(b)
+      || statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
       || typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
       || hourSortValue(hourLabel(a["HORA ARRIBO"] || a["HORA RECIBO"])) - hourSortValue(hourLabel(b["HORA ARRIBO"] || b["HORA RECIBO"]))
       || String(a.PROVEEDOR || "").localeCompare(String(b.PROVEEDOR || "")))
@@ -2746,8 +2785,9 @@ function renderStatusDetail(rows, activeDay="") {
       const type = tipoCita(row);
       const estado = displayLabel(row["ESTADO VEHICULO"] || "");
       const tieneDiferencia = estado === "RECIBIDO" && !esGr && Math.abs(programada - recibida) > 0.001;
+      const esAdicional = additionalSortValue(row) === 1;
       return {
-        _rowClass: `${statusClass(estado)} ${typeClass(type)}${tieneDiferencia ? " qty-alert" : ""}`,
+        _rowClass: `${statusClass(estado)} ${typeClass(type)}${esAdicional ? " cita-adicional" : ""}${tieneDiferencia ? " qty-alert" : ""}`,
         Estado: estado,
         Tipo: type,
         "Cod cita": cleanIdentifier(row["CODIGO CITA"] || ""),
