@@ -1246,17 +1246,17 @@ HTML = r"""<!doctype html>
     }
     .nav-tabs button::after { left:19px; width:7px; height:7px; border-color:#0a5df0; }
     .kpis {
-      grid-template-columns:repeat(6, minmax(0, 1fr));
-      gap:12px;
+      grid-template-columns:repeat(7, minmax(0, 1fr));
+      gap:10px;
       margin:12px 0 14px;
     }
     .kpi {
-      min-height:94px;
+      min-height:86px;
       border-radius:16px;
       border:1px solid var(--premium-line);
       background:linear-gradient(180deg, #fff 0%, #f8fbff 100%);
       box-shadow:0 18px 38px rgba(4,19,38,.075);
-      padding:17px 12px 13px 72px;
+      padding:14px 9px 11px 60px;
       overflow:hidden;
     }
     .kpi.extra {
@@ -1280,10 +1280,10 @@ HTML = r"""<!doctype html>
     .kpi.red::after { background:linear-gradient(180deg, #ef4444, #b91c1c); }
     .kpi.purple::after { background:linear-gradient(180deg, #7c3aed, #5520bd); }
     .kpi .kpi-icon {
-      left:16px;
-      top:18px;
-      width:43px;
-      height:43px;
+      left:13px;
+      top:16px;
+      width:38px;
+      height:38px;
       border-radius:13px;
       background:#e8f1ff;
       color:#0a5df0;
@@ -1293,11 +1293,12 @@ HTML = r"""<!doctype html>
     .kpi.amber .kpi-icon { background:#fff0d8; color:#e28706; }
     .kpi.red .kpi-icon { background:#ffe7eb; color:#ef4444; }
     .kpi.purple .kpi-icon { background:#efe8ff; color:#7c3aed; }
-    .kpi svg { width:22px; height:22px; stroke-width:2.45; }
+    .kpi.extra .kpi-icon { background:#eef2ff; color:#4f46e5; }
+    .kpi svg { width:20px; height:20px; stroke-width:2.45; }
     .kpi span {
       display:block;
       color:#435979;
-      font-size:10px;
+      font-size:9px;
       line-height:1.15;
       font-weight:950;
       text-transform:uppercase;
@@ -1307,13 +1308,13 @@ HTML = r"""<!doctype html>
     .kpi strong {
       margin-top:8px;
       color:#061a38;
-      font-size:clamp(22px, 1.25vw, 28px);
+      font-size:clamp(20px, 1.05vw, 25px);
       line-height:1;
       font-weight:950;
       white-space:nowrap;
       overflow:visible;
     }
-    .kpi small { margin-top:6px; color:#6f819b; font-size:8.5px; font-weight:800; }
+    .kpi small { margin-top:5px; color:#6f819b; font-size:8px; font-weight:800; }
     .filters {
       border-radius:16px;
       border:1px solid var(--premium-line);
@@ -1655,7 +1656,7 @@ HTML = r"""<!doctype html>
       height:22px;
     }
     @media (max-width: 1420px) {
-      .kpis { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+      .kpis { grid-template-columns:repeat(4, minmax(0, 1fr)); }
       .upload { position:static; width:100%; margin:10px 0 8px; }
       .top-title { padding-right:22px; }
     }
@@ -2694,6 +2695,11 @@ function additionalSortValue(row) {
   return String(row["TIPO DE CITA"] || "").trim().toUpperCase() === "ADICIONAL" ? 1 : 0;
 }
 
+function detailSortValue(row) {
+  const estado = displayLabel(row["ESTADO VEHICULO"] || "");
+  return statusSortValue(estado) * 100 + typeSortValue(tipoCita(row)) * 10 + additionalSortValue(row);
+}
+
 function getActiveDay(rows) {
   const estFrom = document.getElementById("estFrom")?.value || "";
   const estTo = document.getElementById("estTo")?.value || "";
@@ -2742,9 +2748,7 @@ function hourSortValue(label) {
 function renderStatusDetail(rows, activeDay="") {
   const detail = rows
     .slice()
-    .sort((a,b) => statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
-      || typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
-      || additionalSortValue(a) - additionalSortValue(b)
+    .sort((a,b) => detailSortValue(a) - detailSortValue(b)
       || hourSortValue(hourLabel(a["HORA ARRIBO"] || a["HORA RECIBO"])) - hourSortValue(hourLabel(b["HORA ARRIBO"] || b["HORA RECIBO"]))
       || String(a.PROVEEDOR || "").localeCompare(String(b.PROVEEDOR || "")))
     .map(row => {
@@ -2783,9 +2787,7 @@ function renderStatusDetail(rows, activeDay="") {
 function renderStatusDetail(rows, activeDay="") {
   const detail = rows
     .slice()
-    .sort((a,b) => statusSortValue(displayLabel(a["ESTADO VEHICULO"] || "")) - statusSortValue(displayLabel(b["ESTADO VEHICULO"] || ""))
-      || typeSortValue(tipoCita(a)) - typeSortValue(tipoCita(b))
-      || additionalSortValue(a) - additionalSortValue(b)
+    .sort((a,b) => detailSortValue(a) - detailSortValue(b)
       || hourSortValue(hourLabel(a["HORA ARRIBO"] || a["HORA RECIBO"])) - hourSortValue(hourLabel(b["HORA ARRIBO"] || b["HORA RECIBO"]))
       || String(a.PROVEEDOR || "").localeCompare(String(b.PROVEEDOR || "")))
     .map(row => {
