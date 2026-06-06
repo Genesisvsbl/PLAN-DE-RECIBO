@@ -311,10 +311,10 @@ def build_conciliation_from_plan(df: pd.DataFrame) -> dict[str, Any]:
         for _, row in grouped.iterrows()
     ]
     summary = {
-        "MP": int(grouped.loc[grouped["TIPO CONCILIACION"].eq("MP"), "Cuenta de TIPO"].sum()),
-        "GR": int(grouped.loc[grouped["TIPO CONCILIACION"].eq("GR"), "Cuenta de TIPO"].sum()),
-        "BTS": int(grouped.loc[grouped["TIPO CONCILIACION"].eq("BTS"), "Cuenta de TIPO"].sum()),
-        "TOTAL DOC": int(grouped["Cuenta de TIPO"].sum()),
+        "MP": int(grouped["TIPO CONCILIACION"].eq("MP").sum()),
+        "GR": int(grouped["TIPO CONCILIACION"].eq("GR").sum()),
+        "BTS": int(grouped["TIPO CONCILIACION"].eq("BTS").sum()),
+        "TOTAL DOC": int(len(grouped)),
     }
     return {"date": "", "summary": summary, "rows": rows}
 
@@ -2722,14 +2722,12 @@ function renderConciliation() {
     return true;
   });
   const counts = { MP: 0, GR: 0, BTS: 0 };
-  const uniqueDocs = new Set();
   rows.forEach(row => {
-    const t = String(row.TIPO || "");
+    const t = String(row.TIPO || "").trim().toUpperCase();
     const doc = String(row["N DOCUMENTO"] || "").trim();
-    if (doc) uniqueDocs.add(doc);
     if (counts[t] != null && doc) counts[t] += 1;
   });
-  const totalDoc = uniqueDocs.size;
+  const totalDoc = counts.MP + counts.GR + counts.BTS;
   const kpis = [
     ["MP", counts.MP, "teal", "doc"],
     ["GR", counts.GR, "", "bars"],
