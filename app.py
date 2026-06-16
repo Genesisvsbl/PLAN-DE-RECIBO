@@ -362,11 +362,10 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
     out["FECHA CONTROL"] = out["FECHA REPROGRAMADA"].fillna(out["FECHA ESTIMADA ENTREGA"])
     anticipo_reprogramado = (
         out["FECHA REPROGRAMADA"].notna()
-        & out["FECHA RECIBO"].notna()
         & fecha_referencia.notna()
         & out["FECHA REPROGRAMADA"].lt(fecha_referencia)
     )
-    out.loc[anticipo_reprogramado, "FECHA CONTROL"] = out.loc[anticipo_reprogramado, "FECHA RECIBO"]
+    out.loc[anticipo_reprogramado, "FECHA CONTROL"] = out.loc[anticipo_reprogramado, "FECHA REPROGRAMADA"]
     out["ES REPROGRAMADA"] = out["FECHA REPROGRAMADA"].notna()
     out["DIA CONTROL"] = out["FECHA CONTROL"].dt.strftime("%Y-%m-%d").fillna("")
     out["ANO CONTROL"] = out["FECHA CONTROL"].dt.year.fillna("").astype(str).str.replace(".0", "", regex=False)
@@ -2271,9 +2270,8 @@ function isReprogrammed(row) {
 function isEarlyReprogrammedReceived(row) {
   if (!isReprogrammed(row)) return false;
   const reprogrammed = String(row["FECHA REPROGRAMADA"] || "").slice(0, 10);
-  const received = String(row["FECHA RECIBO"] || "").slice(0, 10);
   const reference = String(row["FECHA ESTIMADA ENTREGA"] || row["FECHA PROGRAMADA"] || "").slice(0, 10);
-  return Boolean(reprogrammed && received && reference && reprogrammed < reference);
+  return Boolean(reprogrammed && reference && reprogrammed < reference);
 }
 
 function dateMatchesCitaFilter(row, from, to) {
