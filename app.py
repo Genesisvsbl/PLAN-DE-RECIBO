@@ -2268,9 +2268,18 @@ function isReprogrammed(row) {
   return row["ES REPROGRAMADA"] === true || String(row["ES REPROGRAMADA"] || "").toLowerCase() === "true";
 }
 
+function isEarlyReprogrammedReceived(row) {
+  if (!isReprogrammed(row)) return false;
+  const reprogrammed = String(row["FECHA REPROGRAMADA"] || "").slice(0, 10);
+  const received = String(row["FECHA RECIBO"] || "").slice(0, 10);
+  const reference = String(row["FECHA ESTIMADA ENTREGA"] || row["FECHA PROGRAMADA"] || "").slice(0, 10);
+  return Boolean(reprogrammed && received && reference && reprogrammed < reference);
+}
+
 function dateMatchesCitaFilter(row, from, to) {
   if (!from && !to) return true;
   if (dateInRange(row["FECHA CONTROL"], from, to)) return true;
+  if (isEarlyReprogrammedReceived(row)) return false;
   return isReprogrammed(row) && dateInRange(row["FECHA ESTIMADA ENTREGA"], from, to);
 }
 
