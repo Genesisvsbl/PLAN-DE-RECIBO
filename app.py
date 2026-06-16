@@ -358,7 +358,15 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
 
     out["MES ENTREGA"] = out["FECHA ESTIMADA ENTREGA"].dt.strftime("%Y-%m").fillna("Sin fecha")
     out["DIA ENTREGA"] = out["FECHA ESTIMADA ENTREGA"].dt.strftime("%Y-%m-%d").fillna("")
+    fecha_referencia = out["FECHA ESTIMADA ENTREGA"].fillna(out["FECHA PROGRAMADA"])
     out["FECHA CONTROL"] = out["FECHA REPROGRAMADA"].fillna(out["FECHA ESTIMADA ENTREGA"])
+    anticipo_reprogramado = (
+        out["FECHA REPROGRAMADA"].notna()
+        & out["FECHA RECIBO"].notna()
+        & fecha_referencia.notna()
+        & out["FECHA REPROGRAMADA"].lt(fecha_referencia)
+    )
+    out.loc[anticipo_reprogramado, "FECHA CONTROL"] = out.loc[anticipo_reprogramado, "FECHA RECIBO"]
     out["ES REPROGRAMADA"] = out["FECHA REPROGRAMADA"].notna()
     out["DIA CONTROL"] = out["FECHA CONTROL"].dt.strftime("%Y-%m-%d").fillna("")
     out["ANO CONTROL"] = out["FECHA CONTROL"].dt.year.fillna("").astype(str).str.replace(".0", "", regex=False)
