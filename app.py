@@ -2276,9 +2276,7 @@ function isEarlyReprogrammedReceived(row) {
 
 function dateMatchesCitaFilter(row, from, to) {
   if (!from && !to) return true;
-  if (dateInRange(row["FECHA CONTROL"], from, to)) return true;
-  if (isEarlyReprogrammedReceived(row)) return false;
-  return isReprogrammed(row) && dateInRange(row["FECHA ESTIMADA ENTREGA"], from, to);
+  return dateInRange(row["FECHA CONTROL"], from, to);
 }
 
 function renderFilteredKpis() {
