@@ -2283,7 +2283,7 @@ function renderFilteredKpis() {
   const today = new Date().toISOString().slice(0, 10);
   const dueRows = filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) <= today);
   const docComplete = dueRows.filter(row => String(row["N DOCUMENTO"] || "").trim() && (String(row.PLACA || "").trim() || row["ESTADO VEHICULO"] === "PENDIENTE")).length;
-  const status = citaStatusSummary(filteredRows);
+  const status = rowStatusSummary(filteredRows);
   const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
   const reprogrammedRows = filteredRows.filter(row => isReprogrammed(row));
   const scheduledRows = filteredRows.filter(row =>
@@ -2337,8 +2337,17 @@ function citaStatusSummary(rows) {
   return counts;
 }
 
+function rowStatusSummary(rows) {
+  const counts = {};
+  rows.forEach(row => {
+    const status = String(row["ESTADO VEHICULO"] || "").trim().toUpperCase() || "SIN ESTADO";
+    counts[status] = (counts[status] || 0) + 1;
+  });
+  return counts;
+}
+
 function statusItemsFromRows(rows) {
-  return Object.entries(citaStatusSummary(rows))
+  return Object.entries(rowStatusSummary(rows))
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => statusSortValue(a.name) - statusSortValue(b.name));
 }
