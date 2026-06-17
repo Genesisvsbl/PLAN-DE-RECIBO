@@ -2105,7 +2105,7 @@ function renderKpis(k) {
   const reprogrammedTotal = Number(k.reprogrammedTotal || 0);
   const items = [
     ["Citas programadas", k.scheduledTotal ?? Math.max((k.total || 0) - (k.additionalTotal || 0), 0), "", "calendar", ""],
-    ...(additionalTotal > 0 ? [["Citas adicionales", additionalTotal, "extra", "alert", "vh extra"]] : []),
+    ["Citas adicionales", additionalTotal, "extra", "alert", ""],
     ...(reprogrammedTotal > 0 ? [["Citas reprogramadas", reprogrammedTotal, "reprog", "clock", ""]] : []),
     ["Total citas", k.total, "", "calendar", ""],
     ["Recibidos", k.receivedVehicle, "teal", "doc", ""],
