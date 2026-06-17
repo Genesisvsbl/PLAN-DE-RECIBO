@@ -2283,7 +2283,7 @@ function renderFilteredKpis() {
   const today = new Date().toISOString().slice(0, 10);
   const dueRows = filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) <= today);
   const docComplete = dueRows.filter(row => String(row["N DOCUMENTO"] || "").trim() && (String(row.PLACA || "").trim() || row["ESTADO VEHICULO"] === "PENDIENTE")).length;
-  const status = rowStatusSummary(filteredRows);
+  const status = citaStatusSummary(filteredRows);
   const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
   const reprogrammedRows = filteredRows.filter(row => isReprogrammed(row));
   const scheduledRows = filteredRows.filter(row =>
@@ -2291,15 +2291,15 @@ function renderFilteredKpis() {
     && !isReprogrammed(row)
   );
   const k = {
-    total: uniqueCitas(filteredRows).size,
-    scheduledTotal: uniqueCitas(scheduledRows).size,
-    additionalTotal: uniqueCitas(additionalRows).size,
-    reprogrammedTotal: uniqueCitas(reprogrammedRows).size,
+    total: statusTotal(status),
+    scheduledTotal: uniqueCitaStatuses(scheduledRows).size,
+    additionalTotal: uniqueCitaStatuses(additionalRows).size,
+    reprogrammedTotal: uniqueCitaStatuses(reprogrammedRows).size,
     receivedVehicle: status["RECIBIDO"] || 0,
     inAttention: status["EN ATENCION"] || 0,
     pendingVehicle: status["PENDIENTE"] || 0,
     docRate: Math.round((docComplete / Math.max(dueRows.length, 1)) * 1000) / 10,
-    todayTrafficTotal: uniqueCitas(filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) === today)).size,
+    todayTrafficTotal: uniqueCitaStatuses(filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) === today)).size,
   };
   renderKpis(k);
   document.getElementById("status").textContent = `${fmt.format(filteredRows.length)} registros filtrados`;
@@ -2320,34 +2320,26 @@ function citaBase(row) {
 }
 
 function citaStatusSummary(rows) {
-  const priority = {"PENDIENTE": 3, "EN ATENCION": 2, "RECIBIDO": 1};
-  const byCita = new Map();
+  const seen = new Set();
+  const counts = {};
   rows.forEach(row => {
     const cita = citaBase(row);
     if (!cita) return;
-    const status = String(row["ESTADO VEHICULO"] || "").trim().toUpperCase();
-    const current = byCita.get(cita);
-    if (!current || (priority[status] || 0) > (priority[current] || 0)) byCita.set(cita, status);
-  });
-  const counts = {};
-  byCita.forEach(status => {
-    const key = status || "SIN ESTADO";
+    const key = String(row["ESTADO VEHICULO"] || "").trim().toUpperCase() || "SIN ESTADO";
+    const uniqueKey = `${key}|${cita}`;
+    if (seen.has(uniqueKey)) return;
+    seen.add(uniqueKey);
     counts[key] = (counts[key] || 0) + 1;
   });
   return counts;
 }
 
-function rowStatusSummary(rows) {
-  const counts = {};
-  rows.forEach(row => {
-    const status = String(row["ESTADO VEHICULO"] || "").trim().toUpperCase() || "SIN ESTADO";
-    counts[status] = (counts[status] || 0) + 1;
-  });
-  return counts;
+function statusTotal(status) {
+  return Object.values(status).reduce((sum, value) => sum + Number(value || 0), 0);
 }
 
 function statusItemsFromRows(rows) {
-  return Object.entries(rowStatusSummary(rows))
+  return Object.entries(citaStatusSummary(rows))
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => statusSortValue(a.name) - statusSortValue(b.name));
 }
@@ -2357,6 +2349,17 @@ function uniqueCitas(rows) {
   rows.forEach(row => {
     const base = citaBase(row);
     if (base) set.add(base);
+  });
+  return set;
+}
+
+function uniqueCitaStatuses(rows) {
+  const set = new Set();
+  rows.forEach(row => {
+    const base = citaBase(row);
+    if (!base) return;
+    const status = String(row["ESTADO VEHICULO"] || "").trim().toUpperCase() || "SIN ESTADO";
+    set.add(`${status}|${base}`);
   });
   return set;
 }
@@ -2373,7 +2376,8 @@ function countBy(rows, col, limit=10) {
   rows.forEach(row => {
     const key = String(row[col] || `Sin ${col.toLowerCase()}`);
     const cita = citaBase(row);
-    const uniqueKey = cita ? `${key}|${cita}` : "";
+    const status = String(row["ESTADO VEHICULO"] || "").trim().toUpperCase() || "SIN ESTADO";
+    const uniqueKey = cita ? `${key}|${status}|${cita}` : "";
     if (uniqueKey) {
       if (seen.has(uniqueKey)) return;
       seen.add(uniqueKey);
@@ -2820,7 +2824,8 @@ function countCitasByPeriod(rows, mode) {
       : (mode === "week" ? String(row["SEMANA CONTROL"] || row["SEMANA MATERIAL"] || "Sin semana") : String(row["MES CONTROL"] || row["MES ENTREGA"] || "Sin mes"));
     const label = mode === "day" ? shortDate(key) : key;
     const cita = citaBase(row);
-    const uniqueKey = cita ? `${key}|${cita}` : "";
+    const status = String(row["ESTADO VEHICULO"] || "").trim().toUpperCase() || "SIN ESTADO";
+    const uniqueKey = cita ? `${key}|${status}|${cita}` : "";
     if (uniqueKey) {
       if (seen.has(uniqueKey)) return;
       seen.add(uniqueKey);
@@ -2837,7 +2842,8 @@ function countByDay(rows) {
   rows.forEach(row => {
     const day = String(row["FECHA CONTROL"] || row["FECHA ESTIMADA ENTREGA"] || row["FECHA PROGRAMADA"] || "Sin fecha").slice(0, 10) || "Sin fecha";
     const cita = citaBase(row);
-    const uniqueKey = cita ? `${day}|${cita}` : "";
+    const status = String(row["ESTADO VEHICULO"] || "").trim().toUpperCase() || "SIN ESTADO";
+    const uniqueKey = cita ? `${day}|${status}|${cita}` : "";
     if (uniqueKey) {
       if (seen.has(uniqueKey)) return;
       seen.add(uniqueKey);
