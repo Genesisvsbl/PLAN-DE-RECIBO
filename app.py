@@ -2104,14 +2104,14 @@ function renderKpis(k) {
   const additionalTotal = Number(k.additionalTotal || 0);
   const reprogrammedTotal = Number(k.reprogrammedTotal || 0);
   const items = [
-    ["Citas programadas", k.scheduledTotal ?? Math.max((k.total || 0) - (k.additionalTotal || 0), 0), "", "calendar", "plan"],
+    ["Citas programadas", k.scheduledTotal ?? Math.max((k.total || 0) - (k.additionalTotal || 0), 0), "", "calendar", ""],
     ...(additionalTotal > 0 ? [["Citas adicionales", additionalTotal, "extra", "alert", "vh extra"]] : []),
-    ...(reprogrammedTotal > 0 ? [["Citas reprogramadas", reprogrammedTotal, "reprog", "clock", "fecha vigente"]] : []),
-    ["Total citas", k.total, "", "calendar", "vs dia anterior"],
-    ["Recibidos", k.receivedVehicle, "teal", "doc", "vs dia anterior"],
-    ["Atención", k.inAttention, "amber", "clock", "vs dia anterior"],
-    ["Pendientes", k.pendingVehicle || 0, "", "folder", "vs dia anterior"],
-    ["Cumplimiento doc.", `${k.docRate}%`, "purple", "doc", "vs dia anterior"],
+    ...(reprogrammedTotal > 0 ? [["Citas reprogramadas", reprogrammedTotal, "reprog", "clock", ""]] : []),
+    ["Total citas", k.total, "", "calendar", ""],
+    ["Recibidos", k.receivedVehicle, "teal", "doc", ""],
+    ["Atención", k.inAttention, "amber", "clock", ""],
+    ["Pendientes", k.pendingVehicle || 0, "", "folder", ""],
+    ["Cumplimiento doc.", `${k.docRate}%`, "purple", "doc", ""],
   ];
   document.getElementById("kpis").innerHTML = items.map(([label, value, cls, icon, note]) =>
     `<div class="kpi ${cls}"><i class="kpi-icon">${iconSvg(icon)}</i><span>${label}</span><strong>${typeof value === "number" ? money.format(value) : value}</strong><small>${note}</small></div>`
