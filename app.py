@@ -2316,7 +2316,7 @@ function citaBase(row) {
   if (text.toUpperCase() === "BTS") {
     return `BTS|${cleanIdentifier(row["N DOCUMENTO"] || row.SKU || row.MATERIAL || row.PROVEEDOR || "")}`;
   }
-  return "";
+  return cleanIdentifier(text);
 }
 
 function citaStatusSummary(rows) {
