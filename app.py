@@ -2284,8 +2284,9 @@ function renderFilteredKpis() {
   const dueRows = filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) <= today);
   const docComplete = dueRows.filter(row => String(row["N DOCUMENTO"] || "").trim() && (String(row.PLACA || "").trim() || row["ESTADO VEHICULO"] === "PENDIENTE")).length;
   const status = citaStatusSummary(filteredRows);
-  const additionalRows = filteredRows.filter(row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL");
-  const reprogrammedRows = filteredRows.filter(row => isReprogrammed(row));
+  const isAdditional = row => String(row["TIPO DE CITA"] || "").toUpperCase() === "ADICIONAL";
+  const additionalRows = filteredRows.filter(row => isAdditional(row));
+  const reprogrammedRows = filteredRows.filter(row => isReprogrammed(row) && !isAdditional(row));
   const scheduledRows = filteredRows.filter(row =>
     String(row["TIPO DE CITA"] || "PROGRAMADA").toUpperCase() !== "ADICIONAL"
     && !isReprogrammed(row)
