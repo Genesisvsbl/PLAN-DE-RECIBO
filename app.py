@@ -2103,14 +2103,17 @@ function renderModuleMetrics(data) {
 function renderKpis(k) {
   const additionalTotal = Number(k.additionalTotal || 0);
   const reprogrammedTotal = Number(k.reprogrammedTotal || 0);
+  const typeStatus = k.typeStatus || {};
+  const typeData = type => typeStatus[type] || {};
+  const typeNote = item => `Rec ${fmt.format(item.RECIBIDO || 0)} | Aten ${fmt.format(item["EN ATENCION"] || 0)} | Pend ${fmt.format(item.PENDIENTE || 0)}`;
   const items = [
     ["Citas programadas", k.scheduledTotal ?? Math.max((k.total || 0) - (k.additionalTotal || 0), 0), "", "calendar", ""],
     ["Citas adicionales", additionalTotal, "extra", "alert", ""],
     ...(reprogrammedTotal > 0 ? [["Citas reprogramadas", reprogrammedTotal, "reprog", "clock", ""]] : []),
     ["Total citas", k.total, "", "calendar", ""],
-    ["Recibidos", k.receivedVehicle, "teal", "doc", ""],
-    ["Atención", k.inAttention, "amber", "clock", ""],
-    ["Pendientes", k.pendingVehicle || 0, "", "folder", ""],
+    ["MP", typeData("MP").total || 0, "teal", "doc", typeNote(typeData("MP"))],
+    ["GR", typeData("GR").total || 0, "amber", "truck", typeNote(typeData("GR"))],
+    ["BTS", typeData("BTS").total || 0, "purple", "folder", typeNote(typeData("BTS"))],
     ["Cumplimiento doc.", `${k.docRate}%`, "purple", "doc", ""],
   ];
   document.getElementById("kpis").innerHTML = items.map(([label, value, cls, icon, note]) =>
@@ -2299,6 +2302,7 @@ function renderFilteredKpis() {
     receivedVehicle: status["RECIBIDO"] || 0,
     inAttention: status["EN ATENCION"] || 0,
     pendingVehicle: status["PENDIENTE"] || 0,
+    typeStatus: citaTypeStatusSummary(filteredRows),
     docRate: Math.round((docComplete / Math.max(dueRows.length, 1)) * 1000) / 10,
     todayTrafficTotal: uniqueCitaStatuses(filteredRows.filter(row => String(row["FECHA CONTROL"] || "").slice(0, 10) === today)).size,
   };
@@ -2337,6 +2341,24 @@ function citaStatusSummary(rows) {
 
 function statusTotal(status) {
   return Object.values(status).reduce((sum, value) => sum + Number(value || 0), 0);
+}
+
+function citaTypeStatusSummary(rows) {
+  const summary = { MP: {}, GR: {}, BTS: {} };
+  const seen = new Set();
+  rows.forEach(row => {
+    const cita = citaBase(row);
+    if (!cita) return;
+    const type = tipoCita(row);
+    if (!summary[type]) return;
+    const status = String(row["ESTADO VEHICULO"] || "").trim().toUpperCase() || "SIN ESTADO";
+    const uniqueKey = `${type}|${status}|${cita}`;
+    if (seen.has(uniqueKey)) return;
+    seen.add(uniqueKey);
+    summary[type][status] = (summary[type][status] || 0) + 1;
+    summary[type].total = (summary[type].total || 0) + 1;
+  });
+  return summary;
 }
 
 function statusItemsFromRows(rows) {
